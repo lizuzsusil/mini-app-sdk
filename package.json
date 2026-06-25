@@ -1,6 +1,6 @@
 {
   "name": "@lizuzsusil/mini-app-sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell.",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
