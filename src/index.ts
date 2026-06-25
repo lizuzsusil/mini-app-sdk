@@ -15,7 +15,8 @@ export interface PlatformMessage {
   channel: string;
   id: string;
   type: 'request' | 'response' | 'event' | 'handshake';
-  method: string;
+  namespace: string;
+  action: string;
   source: string;
   target: string;
   version: string;
@@ -32,6 +33,29 @@ export type EventHandler = (payload: unknown) => void;
 export interface HttpGetParams {
   endpoint: string;
   query?: Record<string, string>;
+  headers?: Record<string, string>;
+}
+
+export interface HttpPostParams {
+  endpoint: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+}
+
+export interface HttpPutParams {
+  endpoint: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+}
+
+export interface HttpPatchParams {
+  endpoint: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+}
+
+export interface HttpDeleteParams {
+  endpoint: string;
   headers?: Record<string, string>;
 }
 
@@ -100,7 +124,11 @@ export interface DeviceSdkModule {
 }
 
 export interface HttpSdkModule {
-  get<T = unknown>(endpoint: string, query?: Record<string, string>): Promise<HttpResult<T>>;
+  get<T = unknown>(endpoint: string, query?: Record<string, string>, headers?: Record<string, string>): Promise<HttpResult<T>>;
+  post<T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>): Promise<HttpResult<T>>;
+  put<T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>): Promise<HttpResult<T>>;
+  patch<T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>): Promise<HttpResult<T>>;
+  delete<T = unknown>(endpoint: string, headers?: Record<string, string>): Promise<HttpResult<T>>;
 }
 
 export interface MiniAppSdkInterface {
@@ -256,7 +284,8 @@ const MESSAGE_CHANNEL = 'gov-platform-sdk';
 
 function createMessage(
   type: PlatformMessage['type'],
-  method: string,
+  namespace: string,
+  action: string,
   source: string,
   target: string,
   payload?: unknown,
@@ -266,7 +295,8 @@ function createMessage(
     channel: MESSAGE_CHANNEL,
     id: extra?.id ?? generateId(),
     type,
-    method,
+    namespace,
+    action,
     source,
     target,
     version: extra?.version ?? PROTOCOL_VERSION,
@@ -280,7 +310,7 @@ function createMessage(
 function isPlatformMessage(data: unknown): data is PlatformMessage {
   if (!data || typeof data !== 'object') return false;
   const msg = data as Record<string, unknown>;
-  return typeof msg.id === 'string' && typeof msg.type === 'string' && typeof msg.method === 'string';
+  return typeof msg.id === 'string' && typeof msg.type === 'string' && typeof msg.namespace === 'string' && typeof msg.action === 'string';
 }
 
 // ──── SDK transport — pure event-based communication ────────────────
@@ -392,17 +422,17 @@ class SdkTransport {
     }
 
     if (msg.type === 'event') {
-      const handlers = this.eventHandlers.get(msg.method);
+      const handlers = this.eventHandlers.get(`${msg.namespace}.${msg.action}`);
       handlers?.forEach((h) => h(msg.payload));
     }
   }
 
-  async request<T>(method: string, payload?: unknown): Promise<T> {
+  async request<T>(namespace: string, action: string, payload?: unknown): Promise<T> {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.retryAttempts; attempt++) {
       try {
-        return await this.sendRequest<T>(method, payload);
+        return await this.sendRequest<T>(namespace, action, payload);
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         if (err instanceof SdkError && !err.retryable) throw err;
@@ -415,15 +445,15 @@ class SdkTransport {
     throw lastError ?? new Error('Request failed');
   }
 
-  private sendRequest<T>(method: string, payload?: unknown): Promise<T> {
-    const msg = createMessage('request', method, this.moduleId, 'shell', payload, {
+  private sendRequest<T>(namespace: string, action: string, payload?: unknown): Promise<T> {
+    const msg = createMessage('request', namespace, action, this.moduleId, 'shell', payload, {
       traceId: this.traceId,
     });
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(msg.id);
-        reject(new SdkError({ code: 'TIMEOUT', message: `Request ${method} timed out`, retryable: true }));
+        reject(new SdkError({ code: 'TIMEOUT', message: `Request ${namespace}.${action} timed out`, retryable: true }));
       }, this.timeout);
 
       this.pending.set(msg.id, {
@@ -445,7 +475,7 @@ class SdkTransport {
   }
 
   async handshake(): Promise<void> {
-    const msg = createMessage('handshake', 'handshake', this.moduleId, 'shell', {
+    const msg = createMessage('handshake', 'handshake', '', this.moduleId, 'shell', {
       moduleId: this.moduleId,
       sdkVersion: PROTOCOL_VERSION,
     });
@@ -524,7 +554,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     if (this.transport.getMode() === 'flutter') {
       this.platformType = this.transport.getFlutterPlatform() ?? 'ANDROID';
     } else {
-      this.platformType = await this.transport.request<PlatformTypeLiteral>('platform.getType');
+      this.platformType = await this.transport.request<PlatformTypeLiteral>('platform', 'getType');
     }
     this.initialized = true;
   }
@@ -538,7 +568,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   on(event: string, handler: EventHandler): () => void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
-      this.transport.request('event.subscribe', { eventType: event }).catch(() => {});
+      this.transport.request('event', 'subscribe', { eventType: event }).catch(() => {});
     }
     this.eventHandlers.get(event)!.add(handler);
     const transportUnsub = this.transport.onEvent(event, handler);
@@ -551,51 +581,51 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
   private createAuthModule(): AuthSdkModule {
     return {
-      getUser: () => this.transport.request<PlatformUser | null>('auth.getUser'),
-      isAuthenticated: () => this.transport.request<boolean>('auth.isAuthenticated'),
-      logout: () => this.transport.request<void>('auth.logout'),
+      getUser: () => this.transport.request<PlatformUser | null>('auth','getUser'),
+      isAuthenticated: () => this.transport.request<boolean>('auth', 'isAuthenticated'),
+      logout: () => this.transport.request<void>('auth', 'logout'),
     };
   }
 
   private createPermissionsModule(): PermissionsSdkModule {
     return {
-      has: (permission) => this.transport.request<boolean>('permissions.has', { permission }),
-      list: () => this.transport.request<string[]>('permissions.list'),
+      has: (permission) => this.transport.request<boolean>('permissions','has', { permission }),
+      list: () => this.transport.request<string[]>('permissions', 'list'),
     };
   }
 
   private createFlagsModule(): FlagsSdkModule {
     return {
-      isEnabled: (flag) => this.transport.request<boolean>('flags.isEnabled', { flag }),
-      getAll: () => this.transport.request<Record<string, boolean>>('flags.getAll'),
+      isEnabled: (flag) => this.transport.request<boolean>('flags', 'isEnabled', { flag }),
+      getAll: () => this.transport.request<Record<string, boolean>>('flags', 'getAll'),
     };
   }
 
   private createConfigModule(): ConfigSdkModule {
     return {
-      get: <T = unknown>(key: string) => this.transport.request<T | undefined>('config.get', { key }),
-      getAll: () => this.transport.request<Record<string, unknown>>('config.getAll'),
+      get: <T = unknown>(key: string) => this.transport.request<T | undefined>('config', 'get', { key }),
+      getAll: () => this.transport.request<Record<string, unknown>>('config', 'getAll'),
     };
   }
 
   private createNavigationModule(): NavigationSdkModule {
     return {
-      navigate: (target: NavigationTarget) => this.transport.request<void>('navigation.navigate', target),
-      getCurrent: () => this.transport.request<NavigationState>('navigation.getCurrent'),
+      navigate: (target: NavigationTarget) => this.transport.request<void>('navigation', 'navigate', target),
+      getCurrent: () => this.transport.request<NavigationState>('navigation', 'getCurrent'),
     };
   }
 
   private createTelemetryModule(): TelemetrySdkModule {
     return {
       log: (level, message, context) => {
-        this.transport.request('telemetry.log', { level, message, context }).catch(() => {});
+        this.transport.request('telemetry', 'log', { level, message, context }).catch(() => {});
       },
       track: (event, properties) => {
-        this.transport.request('telemetry.track', { event, properties }).catch(() => {});
+        this.transport.request('telemetry', 'track', { event, properties }).catch(() => {});
       },
       error: (error, context) => {
         const message = error instanceof Error ? error.message : error;
-        this.transport.request('telemetry.error', { message, context }).catch(() => {});
+        this.transport.request('telemetry', 'error', { message, context }).catch(() => {});
       },
     };
   }
@@ -615,27 +645,35 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
   private createDeviceModule(): DeviceSdkModule {
     return {
-      location: (options) => this.transport.request<DeviceLocationResult>('device.location', options),
-      camera: (options) => this.transport.request<DeviceCameraResult>('device.camera', options),
-      gallery: (options) => this.transport.request<DeviceGalleryResult>('device.gallery', options),
-      files: (options) => this.transport.request<DeviceFilesResult>('device.files', options),
-      biometric: (options) => this.transport.request<DeviceBiometricResult>('device.biometric', options),
-      notifications: (options) => this.transport.request<DeviceNotificationResult>('device.notifications', options),
-      network: () => this.transport.request<DeviceNetworkResult>('device.network'),
+      location: (options) => this.transport.request<DeviceLocationResult>('device', 'location', options),
+      camera: (options) => this.transport.request<DeviceCameraResult>('device', 'camera', options),
+      gallery: (options) => this.transport.request<DeviceGalleryResult>('device', 'gallery', options),
+      files: (options) => this.transport.request<DeviceFilesResult>('device', 'files', options),
+      biometric: (options) => this.transport.request<DeviceBiometricResult>('device', 'biometric', options),
+      notifications: (options) => this.transport.request<DeviceNotificationResult>('device', 'notifications', options),
+      network: () => this.transport.request<DeviceNetworkResult>('device', 'network'),
       storage: {
         get: (key) =>
-          this.transport.request<{ value: string | null }>('device.storage', { action: 'get', key }).then((r) => r?.value ?? null),
-        set: (key, value) => this.transport.request('device.storage', { action: 'set', key, value }),
-        remove: (key) => this.transport.request('device.storage', { action: 'remove', key }),
+          this.transport.request<{ value: string | null }>('device', 'storage', { action: 'get', key }).then((r) => r?.value ?? null),
+        set: (key, value) => this.transport.request('device', 'storage', { action: 'set', key, value }),
+        remove: (key) => this.transport.request('device', 'storage', { action: 'remove', key }),
       },
-      info: () => this.transport.request<DeviceInfoResult>('device.info'),
+      info: () => this.transport.request<DeviceInfoResult>('device', 'info'),
     };
   }
 
   private createHttpModule(): HttpSdkModule {
     return {
-      get: <T = unknown>(endpoint: string, query?: Record<string, string>) =>
-        this.transport.request<HttpResult<T>>('http.get', { endpoint, query } as HttpGetParams),
+      get: <T = unknown>(endpoint: string, query?: Record<string, string>, headers?: Record<string, string>) =>
+        this.transport.request<HttpResult<T>>('http', 'get', { endpoint, query, headers } as HttpGetParams),
+      post: <T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
+        this.transport.request<HttpResult<T>>('http', 'post', { endpoint, body, headers } as HttpPostParams),
+      put: <T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
+        this.transport.request<HttpResult<T>>('http', 'put', { endpoint, body, headers } as HttpPutParams),
+      patch: <T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
+        this.transport.request<HttpResult<T>>('http', 'patch', { endpoint, body, headers } as HttpPatchParams),
+      delete: <T = unknown>(endpoint: string, headers?: Record<string, string>) =>
+        this.transport.request<HttpResult<T>>('http', 'delete', { endpoint, headers } as HttpDeleteParams),
     };
   }
 }

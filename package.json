@@ -1,5 +1,5 @@
 {
-  "name": "mini-app-sdk",
+  "name": "liz-remote-sdk",
   "version": "1.0.0",
   "description": "Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell.",
   "main": "./dist/index.js",

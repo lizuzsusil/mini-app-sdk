@@ -71,7 +71,7 @@ export function MiniAppSdkProvider({
     );
   }
   if (!isReady) return <>{fallback ?? <div>Connecting to platform...</div>}</>;
-    console.log("isReady", isReady, error);
+
   return (
     <SdkContext.Provider value={{ sdk, user, isReady, error }}>
       {children}
