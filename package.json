@@ -1,7 +1,10 @@
 {
-  "name": "liz-remote-sdk",
+  "name": "@lizuzsusil/mini-app-sdk",
   "version": "1.0.0",
   "description": "Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell.",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
