@@ -1,11 +1,10 @@
-# mini-app-sdk
+# @lizuzsusil/mini-app-sdk
 
 Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell.
 
 ## Features
 
 - **Framework-agnostic**: Core SDK works with any framework or vanilla JS
-- **React integration**: First-class React hooks and provider
 - **Event-based protocol**: Request/response, events, and handshake messaging
 - **Cross-platform**: Works on Web, Android (Flutter), and iOS (Flutter)
 - **Type-safe**: Full TypeScript support with comprehensive types
@@ -13,22 +12,46 @@ Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication 
 ## Installation
 
 ```bash
-pnpm add mini-app-sdk
+pnpm add @lizuzsusil/mini-app-sdk
 # or
-npm install mini-app-sdk
+npm install @lizuzsusil/mini-app-sdk
 ```
 
-Peer dependency (optional, for React integration):
-```bash
-pnpm add react@>=16.8.0
+## CDN Usage
+
+Publish the package to npm, then load the minified browser build from jsDelivr with an explicit version:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@lizuzsusil/mini-app-sdk@1.0.0/dist/mini-app-sdk.min.js"></script>
 ```
+
+The script build exposes the SDK on `window.MiniAppSdk`:
+
+```html
+<script>
+  MiniAppSdk.initMiniAppSdk({
+    moduleId: 'my-mini-app',
+    timeout: 10000,
+  }).then((sdk) => {
+    // SDK is ready.
+  });
+</script>
+```
+
+For browser ESM imports, use the compiled module file:
+
+```js
+import { initMiniAppSdk } from 'https://cdn.jsdelivr.net/npm/@lizuzsusil/mini-app-sdk@1.0.0/dist/index.mjs';
+```
+
+Use an exact version in production CDN links so published mini apps keep loading the same code. After each release, update the version segment in the URL.
 
 ## Quick Start
 
 ### Core SDK (Vanilla JS / Any Framework)
 
 ```typescript
-import { initMiniAppSdk, MiniAppSdkOptions } from 'mini-app-sdk';
+import { initMiniAppSdk, type MiniAppSdkOptions } from '@lizuzsusil/mini-app-sdk';
 
 const options: MiniAppSdkOptions = {
   moduleId: 'my-mini-app',
@@ -53,39 +76,6 @@ const unsubscribe = sdk.on('notification.received', (payload) => {
 sdk.destroy();
 ```
 
-### React Integration
-
-```tsx
-import { MiniAppSdkProvider, useMiniAppSdk, usePlatformUser } from 'mini-app-sdk/react';
-
-function App() {
-  return (
-    <MiniAppSdkProvider moduleId="my-mini-app" fallback={<Loading />}>
-      <Dashboard />
-    </MiniAppSdkProvider>
-  );
-}
-
-function Dashboard() {
-  const sdk = useMiniAppSdk();
-  const user = usePlatformUser();
-
-  const handleNavigate = async () => {
-    await sdk.navigation.navigate({
-      app: 'settings',
-      route: '/profile',
-    });
-  };
-
-  return (
-    <div>
-      <h1>Welcome, {user?.name}</h1>
-      <button onClick={handleNavigate}>Go to Settings</button>
-    </div>
-  );
-}
-```
-
 ## API Reference
 
 ### Core Modules
@@ -100,7 +90,7 @@ function Dashboard() {
 | `telemetry` | Logging & analytics: `log()`, `track()`, `error()` |
 | `platform` | Platform detection: `type`, `isWeb()`, `isAndroid()`, `isIOS()`, `isMobile()` |
 | `device` | Device APIs: `location()`, `camera()`, `gallery()`, `files()`, `biometric()`, `notifications()`, `network()`, `storage`, `info()` |
-| `http` | HTTP requests: `get()` |
+| `http` | HTTP requests: `get()`, `post()`, `put()`, `patch()`, `delete()` |
 
 ### Types
 
@@ -126,7 +116,8 @@ interface PlatformMessage {
   channel: string;
   id: string;
   type: 'request' | 'response' | 'event' | 'handshake';
-  method: string;
+  namespace: string;
+  action: string;
   source: string;
   target: string;
   version: string;
@@ -145,6 +136,12 @@ pnpm install
 
 # Build
 pnpm build
+
+# Inspect files that will be published
+pnpm pack --dry-run
+
+# Publish public scoped package to npm
+npm publish --access public
 
 # Watch mode
 pnpm dev

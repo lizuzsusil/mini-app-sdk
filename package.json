@@ -2,42 +2,41 @@
   "name": "@lizuzsusil/mini-app-sdk",
   "version": "1.0.0",
   "description": "Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell.",
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "browser": "./dist/mini-app-sdk.min.js",
+  "unpkg": "./dist/mini-app-sdk.min.js",
+  "jsdelivr": "./dist/mini-app-sdk.min.js",
   "exports": {
     ".": {
+      "browser": "./dist/mini-app-sdk.min.js",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js"
-    },
-    "./react": {
-      "types": "./dist/react/index.d.ts",
-      "import": "./dist/react/index.mjs",
-      "require": "./dist/react/index.js"
     }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "sideEffects": false,
   "scripts": {
-    "build": "tsup src/index.ts src/react/index.tsx --format cjs,esm --dts --clean",
-    "dev": "tsup src/index.ts src/react/index.tsx --format cjs,esm --dts --watch",
+    "build": "pnpm run build:lib && pnpm run build:cdn",
+    "build:lib": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "build:cdn": "esbuild src/index.ts --bundle --format=iife --global-name=MiniAppSdk --platform=browser --target=es2020 --minify --outfile=dist/mini-app-sdk.min.js",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
-    "@types/react": "^19.2.17",
+    "esbuild": "^0.27.7",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
-  },
-  "peerDependencies": {
-    "react": ">=16.8.0"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    }
   }
 }
