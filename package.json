@@ -28,7 +28,8 @@
   "scripts": {
     "build": "pnpm run build:lib && pnpm run build:cdn",
     "build:lib": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "build:cdn": "esbuild src/index.ts --bundle --format=iife --global-name=MiniAppSdk --platform=browser --target=es2020 --minify --outfile=dist/mini-app-sdk.min.js",
+    "build:cdn": "esbuild src/cdn.ts --bundle --format=iife --platform=browser --target=es2020 --minify --outfile=dist/mini-app-sdk.min.js",
+    "build:registry": "esbuild src/cdn.ts --bundle --format=iife --platform=browser --target=es2020 --outfile=dist/mini-app-sdk.registry.global.js",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist"
