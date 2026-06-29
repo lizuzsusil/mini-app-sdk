@@ -186,23 +186,19 @@ interface MiniAppSdkOptions {
     retryAttempts?: number;
     retryDelayMs?: number;
 }
-declare const FLUTTER_BRIDGE_KEY = "__GOV_FLUTTER_BRIDGE__";
 interface FlutterBridge {
     postMessage: (message: string) => void;
     platform: 'ANDROID' | 'IOS';
 }
-declare global {
-    interface Window {
-        [FLUTTER_BRIDGE_KEY]?: FlutterBridge;
-        govFlutterCallback?: (response: string) => void;
-    }
-}
+type TransportMode = 'web' | 'flutter';
+
 declare class SdkError extends Error {
     code: string;
     retryable: boolean;
     details?: Record<string, unknown>;
     constructor(error: PlatformError);
 }
+
 declare class MiniAppSdk implements MiniAppSdkInterface {
     readonly moduleId: string;
     readonly version = "1.0.0";
@@ -238,4 +234,56 @@ declare function createMiniAppSdk(options: MiniAppSdkOptions): MiniAppSdk;
 declare function getMiniAppSdk(): MiniAppSdk;
 declare function initMiniAppSdk(options: MiniAppSdkOptions): Promise<MiniAppSdk>;
 
-export { type AuthSdkModule, type ConfigSdkModule, type DeviceBiometricResult, type DeviceCameraResult, type DeviceFilesResult, type DeviceGalleryResult, type DeviceInfoResult, type DeviceLocationResult, type DeviceNetworkResult, type DeviceNotificationResult, type DeviceSdkModule, type EventHandler, type FlagsSdkModule, type HttpDeleteParams, type HttpGetParams, type HttpPatchParams, type HttpPostParams, type HttpPutParams, type HttpResult, type HttpSdkModule, MiniAppSdk, type MiniAppSdkInterface, type MiniAppSdkOptions, type NavigationSdkModule, type NavigationState, type NavigationTarget, type PermissionsSdkModule, type PlatformError, type PlatformMessage, type PlatformSdkModule, type PlatformTypeLiteral, type PlatformUser, SdkError, type TelemetrySdkModule, createMiniAppSdk, getMiniAppSdk, initMiniAppSdk };
+declare class SdkTransport {
+    private pending;
+    private eventHandlers;
+    private messageListener;
+    private customEventListener;
+    private readonly timeout;
+    private readonly retryAttempts;
+    private readonly retryDelayMs;
+    private readonly moduleId;
+    private traceId;
+    private mode;
+    private flutterBridge;
+    private originalFlutterCallback;
+    constructor(moduleId: string, options: {
+        timeout?: number;
+        retryAttempts?: number;
+        retryDelayMs?: number;
+    });
+    start(): void;
+    stop(): void;
+    getMode(): TransportMode;
+    getFlutterPlatform(): 'ANDROID' | 'IOS' | null;
+    private handleIncomingMessage;
+    request<T>(namespace: string, action: string, payload?: unknown): Promise<T>;
+    private sendRequest;
+    private sendMessage;
+    handshake(): Promise<void>;
+    onEvent(event: string, handler: EventHandler): () => void;
+    getTraceId(): string;
+}
+
+declare const FLUTTER_BRIDGE_KEY = "__GOV_FLUTTER_BRIDGE__";
+declare const PROTOCOL_VERSION = "1.0.0";
+declare const PLATFORM_EVENT_NAME = "gov-platform-event";
+declare const MESSAGE_CHANNEL = "gov-platform-sdk";
+declare global {
+    interface Window {
+        [FLUTTER_BRIDGE_KEY]?: FlutterBridge;
+        govFlutterCallback?: (response: string) => void;
+    }
+}
+
+declare function generateId(): string;
+declare function delay(ms: number): Promise<void>;
+declare function createMessage(type: PlatformMessage['type'], namespace: string, action: string, source: string, target: string, payload?: unknown, extra?: {
+    id?: string;
+    traceId?: string;
+    version?: string;
+    error?: PlatformMessage['error'];
+}): PlatformMessage;
+declare function isPlatformMessage(data: unknown): data is PlatformMessage;
+
+export { type AuthSdkModule, type ConfigSdkModule, type DeviceBiometricResult, type DeviceCameraResult, type DeviceFilesResult, type DeviceGalleryResult, type DeviceInfoResult, type DeviceLocationResult, type DeviceNetworkResult, type DeviceNotificationResult, type DeviceSdkModule, type EventHandler, FLUTTER_BRIDGE_KEY, type FlagsSdkModule, type FlutterBridge, type HttpDeleteParams, type HttpGetParams, type HttpPatchParams, type HttpPostParams, type HttpPutParams, type HttpResult, type HttpSdkModule, MESSAGE_CHANNEL, MiniAppSdk, type MiniAppSdkInterface, type MiniAppSdkOptions, type NavigationSdkModule, type NavigationState, type NavigationTarget, PLATFORM_EVENT_NAME, PROTOCOL_VERSION, type PermissionsSdkModule, type PlatformError, type PlatformMessage, type PlatformSdkModule, type PlatformTypeLiteral, type PlatformUser, SdkError, SdkTransport, type TelemetrySdkModule, type TransportMode, createMessage, createMiniAppSdk, delay, generateId, getMiniAppSdk, initMiniAppSdk, isPlatformMessage };

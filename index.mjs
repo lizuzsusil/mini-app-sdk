@@ -1,5 +1,4 @@
-// src/index.ts
-var FLUTTER_BRIDGE_KEY = "__GOV_FLUTTER_BRIDGE__";
+// src/errors.ts
 var SdkError = class extends Error {
   constructor(error) {
     super(error.message);
@@ -9,8 +8,14 @@ var SdkError = class extends Error {
     this.details = error.details;
   }
 };
+
+// src/constants.ts
+var FLUTTER_BRIDGE_KEY = "__GOV_FLUTTER_BRIDGE__";
 var PROTOCOL_VERSION = "1.0.0";
 var PLATFORM_EVENT_NAME = "gov-platform-event";
+var MESSAGE_CHANNEL = "gov-platform-sdk";
+
+// src/utils.ts
 function generateId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -18,7 +23,6 @@ function generateId() {
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-var MESSAGE_CHANNEL = "gov-platform-sdk";
 function createMessage(type, namespace, action, source, target, payload, extra) {
   return {
     channel: MESSAGE_CHANNEL,
@@ -40,6 +44,8 @@ function isPlatformMessage(data) {
   const msg = data;
   return typeof msg.id === "string" && typeof msg.type === "string" && typeof msg.namespace === "string" && typeof msg.action === "string";
 }
+
+// src/transport.ts
 var SdkTransport = class {
   constructor(moduleId, options) {
     this.pending = /* @__PURE__ */ new Map();
@@ -172,7 +178,7 @@ var SdkTransport = class {
   async handshake() {
     const msg = createMessage("handshake", "handshake", "", this.moduleId, "shell", {
       moduleId: this.moduleId,
-      sdkVersion: PROTOCOL_VERSION
+      sdkVersion: "1.0.0"
     });
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -198,6 +204,8 @@ var SdkTransport = class {
     return this.traceId;
   }
 };
+
+// src/sdk.ts
 var MiniAppSdk = class {
   constructor(options) {
     this.version = PROTOCOL_VERSION;
@@ -349,9 +357,18 @@ async function initMiniAppSdk(options) {
   return globalSdk;
 }
 export {
+  FLUTTER_BRIDGE_KEY,
+  MESSAGE_CHANNEL,
   MiniAppSdk,
+  PLATFORM_EVENT_NAME,
+  PROTOCOL_VERSION,
   SdkError,
+  SdkTransport,
+  createMessage,
   createMiniAppSdk,
+  delay,
+  generateId,
   getMiniAppSdk,
-  initMiniAppSdk
+  initMiniAppSdk,
+  isPlatformMessage
 };
