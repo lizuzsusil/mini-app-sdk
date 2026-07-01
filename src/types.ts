@@ -217,10 +217,3 @@ export interface MiniAppSdkOptions {
   retryAttempts?: number;
   retryDelayMs?: number;
 }
-
-export interface FlutterBridge {
-  postMessage: (message: string) => void;
-  platform: 'ANDROID' | 'IOS';
-}
-
-export type TransportMode = 'web' | 'flutter';

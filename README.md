@@ -107,7 +107,7 @@ The SDK communicates with the host shell via **event-based messaging**:
 1. **Handshake**: Establishes connection on initialization
 2. **Request/Response**: Method calls with payloads and async responses
 3. **Events**: Subscribe to platform events (notifications, config changes, etc.)
-4. **Transport**: Auto-detects Web (postMessage) or Flutter (native bridge)
+4. **Transport**: Universal `postMessage` / `message` event protocol for all environments
 
 ### Message Protocol
 

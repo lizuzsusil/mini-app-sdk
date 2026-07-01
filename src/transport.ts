@@ -1,6 +1,6 @@
-import { FLUTTER_BRIDGE_KEY, PLATFORM_EVENT_NAME } from './constants';
+import { PLATFORM_EVENT_NAME } from './constants';
 import { SdkError } from './errors';
-import type { EventHandler, FlutterBridge, PlatformMessage, TransportMode } from './types';
+import type { EventHandler, PlatformMessage } from './types';
 import { createMessage, delay, generateId, isPlatformMessage } from './utils';
 
 export class SdkTransport {
@@ -16,9 +16,6 @@ export class SdkTransport {
   private readonly retryDelayMs: number;
   private readonly moduleId: string;
   private traceId: string;
-  private mode: TransportMode = 'web';
-  private flutterBridge: FlutterBridge | null = null;
-  private originalFlutterCallback: ((response: string) => void) | undefined;
 
   constructor(moduleId: string, options: { timeout?: number; retryAttempts?: number; retryDelayMs?: number }) {
     this.moduleId = moduleId;
@@ -29,26 +26,6 @@ export class SdkTransport {
   }
 
   start(): void {
-    const bridge = typeof window !== 'undefined' ? window[FLUTTER_BRIDGE_KEY] : undefined;
-    if (bridge) {
-      this.mode = 'flutter';
-      this.flutterBridge = bridge;
-
-      this.originalFlutterCallback = window.govFlutterCallback;
-      window.govFlutterCallback = (responseJson: string) => {
-        this.originalFlutterCallback?.(responseJson);
-        try {
-          const msg = JSON.parse(responseJson) as PlatformMessage;
-          if (isPlatformMessage(msg)) {
-            this.handleIncomingMessage(msg);
-          }
-        } catch {
-          // ignore malformed messages from other sources
-        }
-      };
-      return;
-    }
-
     this.messageListener = (event: MessageEvent) => {
       if (!isPlatformMessage(event.data)) return;
       this.handleIncomingMessage(event.data);
@@ -64,33 +41,14 @@ export class SdkTransport {
   }
 
   stop(): void {
-    if (this.mode === 'flutter') {
-      if (this.originalFlutterCallback) {
-        window.govFlutterCallback = this.originalFlutterCallback;
-      } else {
-        delete window.govFlutterCallback;
-      }
-      this.flutterBridge = null;
-      this.originalFlutterCallback = undefined;
-      this.mode = 'web';
-    } else {
-      if (this.messageListener) window.removeEventListener('message', this.messageListener);
-      if (this.customEventListener) window.removeEventListener(PLATFORM_EVENT_NAME, this.customEventListener);
-    }
+    if (this.messageListener) window.removeEventListener('message', this.messageListener);
+    if (this.customEventListener) window.removeEventListener(PLATFORM_EVENT_NAME, this.customEventListener);
     for (const [, p] of this.pending) {
       clearTimeout(p.timer);
       p.reject(new Error('Transport stopped'));
     }
     this.pending.clear();
     this.eventHandlers.clear();
-  }
-
-  getMode(): TransportMode {
-    return this.mode;
-  }
-
-  getFlutterPlatform(): 'ANDROID' | 'IOS' | null {
-    return this.flutterBridge?.platform ?? null;
   }
 
   private handleIncomingMessage(msg: PlatformMessage): void {
@@ -155,17 +113,13 @@ export class SdkTransport {
   }
 
   private sendMessage(msg: PlatformMessage): void {
-    if (this.mode === 'flutter' && this.flutterBridge) {
-      this.flutterBridge.postMessage(JSON.stringify(msg));
-    } else {
-      window.parent.postMessage(msg, '*');
-    }
+    window.parent.postMessage(msg, '*');
   }
 
   async handshake(): Promise<void> {
     const msg = createMessage('handshake', 'handshake', '', this.moduleId, 'shell', {
       moduleId: this.moduleId,
-      sdkVersion: '1.0.0',
+      sdkVersion: '2.0.0',
     });
 
     return new Promise((resolve, reject) => {

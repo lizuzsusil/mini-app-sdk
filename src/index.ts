@@ -1,7 +1,7 @@
 export { SdkError } from './errors';
 export { MiniAppSdk, createMiniAppSdk, getMiniAppSdk, initMiniAppSdk } from './sdk';
 export { SdkTransport } from './transport';
-export { PROTOCOL_VERSION, PLATFORM_EVENT_NAME, MESSAGE_CHANNEL, FLUTTER_BRIDGE_KEY } from './constants';
+export { PROTOCOL_VERSION, PLATFORM_EVENT_NAME, MESSAGE_CHANNEL } from './constants';
 export { createMessage, generateId, delay, isPlatformMessage } from './utils';
 export type {
   PlatformError,
@@ -36,6 +36,4 @@ export type {
   DeviceNotificationResult,
   DeviceNetworkResult,
   DeviceInfoResult,
-  FlutterBridge,
-  TransportMode,
 } from './types';

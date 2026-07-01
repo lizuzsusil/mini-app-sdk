@@ -50,7 +50,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
   private transport: SdkTransport;
   private initialized = false;
-  private platformType: PlatformTypeLiteral = 'WEB';
   private eventHandlers = new Map<string, Set<EventHandler>>();
 
   constructor(options: MiniAppSdkOptions) {
@@ -73,11 +72,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     if (this.initialized) return;
     this.transport.start();
     await this.transport.handshake();
-    if (this.transport.getMode() === 'flutter') {
-      this.platformType = this.transport.getFlutterPlatform() ?? 'ANDROID';
-    } else {
-      this.platformType = await this.transport.request<PlatformTypeLiteral>('platform', 'getType');
-    }
+    this.platformType = await this.transport.request<PlatformTypeLiteral>('platform', 'getType');
     this.initialized = true;
   }
 
@@ -100,6 +95,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       transportUnsub();
     };
   }
+
+  // platform module needs access to the mutable platformType
+  private platformType: PlatformTypeLiteral = 'WEB';
 
   private createAuthModule(): AuthSdkModule {
     return {
