@@ -19,10 +19,10 @@ npm install @lizuzsusil/mini-app-sdk
 
 ## CDN Usage
 
-Publish the package to npm, then load the minified browser build from jsDelivr with an explicit version:
+The minified browser build is served from GitHub via jsDelivr CDN. After creating a `vX.Y.Z` tag, the GitHub Actions workflow builds `dist/`, commits it to the tag, and purges the jsDelivr cache.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@lizuzsusil/mini-app-sdk@1.0.0/dist/mini-app-sdk.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/lizuzsusil/mini-app-sdk@v2.0.0/dist/mini-app-sdk.min.js"></script>
 ```
 
 The script build exposes the SDK on `window.MiniAppSdk`:
@@ -41,7 +41,7 @@ The script build exposes the SDK on `window.MiniAppSdk`:
 For browser ESM imports, use the compiled module file:
 
 ```js
-import { initMiniAppSdk } from 'https://cdn.jsdelivr.net/npm/@lizuzsusil/mini-app-sdk@1.0.0/dist/index.mjs';
+import { initMiniAppSdk } from 'https://cdn.jsdelivr.net/gh/lizuzsusil/mini-app-sdk@v2.0.0/dist/index.mjs';
 ```
 
 Use an exact version in production CDN links so published mini apps keep loading the same code. After each release, update the version segment in the URL.

@@ -28,16 +28,30 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
-      # Commit the built dist folder into the tag
       - name: Commit dist folder
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          if git diff --quiet dist/; then
+
+          # dist/ is gitignored, so it must be force-added or `git add` silently
+          # skips it entirely (and so would `git diff` against the working tree).
+          git add -f dist/
+
+          # Compare the STAGED tree against HEAD, not the working tree.
+          # This correctly detects "new file with real content" vs "nothing changed".
+          if git diff --cached --quiet; then
             echo "No changes in dist folder"
           else
-            git add dist/
-            git commit -m "chore: update dist for v${GITHUB_REF#refs/tags/v} [skip ci]" || echo "Nothing to commit"
+            git commit -m "chore: update dist for v${GITHUB_REF#refs/tags/v} [skip ci]"
+
+            # NOTE: on a tag-push event, GITHUB_REF is refs/tags/vX.Y.Z, not
+            # refs/heads/branch — so the #refs/heads/ strip is a no-op here.
+            # This intentionally force-pushes the dist commit onto the tag
+            # itself, moving it forward so dist/ exists at that tag ref.
             git push origin HEAD:${GITHUB_REF#refs/heads/} --force-with-lease
           fi
+
+      - name: Purge jsDelivr cache
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          curl -s "https://purge.jsdelivr.net/gh/lizuzsusil/mini-app-sdk@v${VERSION}/dist/mini-app-sdk.min.js"
