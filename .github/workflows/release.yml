@@ -48,7 +48,12 @@ jobs:
             # refs/heads/branch — so the #refs/heads/ strip is a no-op here.
             # This intentionally force-pushes the dist commit onto the tag
             # itself, moving it forward so dist/ exists at that tag ref.
-            git push origin HEAD:${GITHUB_REF#refs/heads/} --force-with-lease
+            #
+            # --force is used (not --force-with-lease) because the remote tag
+            # was just pushed microseconds before this workflow ran, so the
+            # lease check fails ("stale info"). Since the CI pipeline is the
+            # sole mutator of this tag, --force is safe here.
+            git push origin HEAD:${GITHUB_REF#refs/heads/} --force
           fi
 
       - name: Purge jsDelivr cache
