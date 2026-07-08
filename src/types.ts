@@ -8,7 +8,7 @@ export interface PlatformError {
 export interface PlatformMessage {
   channel: string;
   id: string;
-  type: 'request' | 'response' | 'event' | 'handshake';
+  type: "request" | "response" | "event" | "handshake";
   namespace: string;
   action: string;
   source: string;
@@ -103,7 +103,9 @@ export interface DeviceSdkModule {
   gallery(options?: Record<string, unknown>): Promise<DeviceGalleryResult>;
   files(options?: Record<string, unknown>): Promise<DeviceFilesResult>;
   biometric(options?: Record<string, unknown>): Promise<DeviceBiometricResult>;
-  notifications(options?: Record<string, unknown>): Promise<DeviceNotificationResult>;
+  notifications(
+    options?: Record<string, unknown>,
+  ): Promise<DeviceNotificationResult>;
   network(): Promise<DeviceNetworkResult>;
   storage: {
     get(key: string): Promise<string | null>;
@@ -114,11 +116,30 @@ export interface DeviceSdkModule {
 }
 
 export interface HttpSdkModule {
-  get<T = unknown>(endpoint: string, query?: Record<string, string>, headers?: Record<string, string>): Promise<HttpResult<T>>;
-  post<T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>): Promise<HttpResult<T>>;
-  put<T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>): Promise<HttpResult<T>>;
-  patch<T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>): Promise<HttpResult<T>>;
-  delete<T = unknown>(endpoint: string, headers?: Record<string, string>): Promise<HttpResult<T>>;
+  get<T = unknown>(
+    endpoint: string,
+    query?: Record<string, string>,
+    headers?: Record<string, string>,
+  ): Promise<HttpResult<T>>;
+  post<T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<HttpResult<T>>;
+  put<T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<HttpResult<T>>;
+  patch<T = unknown>(
+    endpoint: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<HttpResult<T>>;
+  delete<T = unknown>(
+    endpoint: string,
+    headers?: Record<string, string>,
+  ): Promise<HttpResult<T>>;
 }
 
 export interface MiniAppSdkInterface {
@@ -139,7 +160,7 @@ export interface MiniAppSdkInterface {
   on(event: string, handler: EventHandler): () => void;
 }
 
-export type PlatformTypeLiteral = 'WEB' | 'ANDROID' | 'IOS';
+export type PlatformTypeLiteral = "WEB" | "ANDROID" | "IOS";
 
 export interface PlatformUser {
   id: string;
@@ -198,7 +219,7 @@ export interface DeviceNotificationResult {
 
 export interface DeviceNetworkResult {
   online: boolean;
-  type?: 'wifi' | 'cellular' | 'none';
+  type?: "wifi" | "cellular" | "none";
   effectiveType?: string;
 }
 
@@ -216,4 +237,8 @@ export interface MiniAppSdkOptions {
   timeout?: number;
   retryAttempts?: number;
   retryDelayMs?: number;
+  targetOrigin?: string;
 }
+/** @deprecated Use `MiniAppSdkOptions` instead. Removed in v4.0.0. */
+ export type SdkConfig =
+  MiniAppSdkOptions;

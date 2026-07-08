@@ -1,12 +1,16 @@
-import { PLATFORM_EVENT_NAME } from './constants';
-import { SdkError } from './errors';
-import type { EventHandler, PlatformMessage } from './types';
-import { createMessage, delay, generateId, isPlatformMessage } from './utils';
+import { PLATFORM_EVENT_NAME, PROTOCOL_VERSION } from "./constants";
+import { SdkError, ErrorCodes } from "./errors";
+import type { EventHandler, PlatformMessage } from "./types";
+import { createMessage, delay, generateId, isPlatformMessage } from "./utils";
 
 export class SdkTransport {
   private pending = new Map<
     string,
-    { resolve: (value: unknown) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }
+    {
+      resolve: (value: unknown) => void;
+      reject: (err: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
   >();
   private eventHandlers = new Map<string, Set<EventHandler>>();
   private messageListener: ((event: MessageEvent) => void) | null = null;
@@ -16,21 +20,32 @@ export class SdkTransport {
   private readonly retryDelayMs: number;
   private readonly moduleId: string;
   private traceId: string;
+  private readonly targetOrigin: string;
 
-  constructor(moduleId: string, options: { timeout?: number; retryAttempts?: number; retryDelayMs?: number }) {
+  constructor(
+    moduleId: string,
+    options: {
+      timeout?: number;
+      retryAttempts?: number;
+      retryDelayMs?: number;
+      targetOrigin?: string;
+    },
+  ) {
     this.moduleId = moduleId;
     this.timeout = options.timeout ?? 10000;
+    this.targetOrigin = options.targetOrigin ?? "*";
     this.retryAttempts = options.retryAttempts ?? 2;
     this.retryDelayMs = options.retryDelayMs ?? 500;
     this.traceId = generateId();
   }
 
   start(): void {
+    if (typeof window === "undefined") return;
     this.messageListener = (event: MessageEvent) => {
       if (!isPlatformMessage(event.data)) return;
       this.handleIncomingMessage(event.data);
     };
-    window.addEventListener('message', this.messageListener);
+    window.addEventListener("message", this.messageListener);
 
     this.customEventListener = (event: Event) => {
       const msg = (event as CustomEvent<PlatformMessage>).detail;
@@ -41,20 +56,24 @@ export class SdkTransport {
   }
 
   stop(): void {
-    if (this.messageListener) window.removeEventListener('message', this.messageListener);
-    if (this.customEventListener) window.removeEventListener(PLATFORM_EVENT_NAME, this.customEventListener);
+    if (this.messageListener)
+      window.removeEventListener("message", this.messageListener);
+    if (this.customEventListener)
+      window.removeEventListener(PLATFORM_EVENT_NAME, this.customEventListener);
     for (const [, p] of this.pending) {
       clearTimeout(p.timer);
-      p.reject(new Error('Transport stopped'));
+      p.reject(
+        SdkError.create(ErrorCodes.TRANSPORT_STOPPED, "Trasnport stopped"),
+      );
     }
     this.pending.clear();
     this.eventHandlers.clear();
   }
 
   private handleIncomingMessage(msg: PlatformMessage): void {
-    if (msg.target !== this.moduleId && msg.target !== '*') return;
+    if (msg.target !== this.moduleId && msg.target !== "*") return;
 
-    if (msg.type === 'response') {
+    if (msg.type === "response") {
       const pending = this.pending.get(msg.id);
       if (pending) {
         clearTimeout(pending.timer);
@@ -67,13 +86,17 @@ export class SdkTransport {
       }
     }
 
-    if (msg.type === 'event') {
+    if (msg.type === "event") {
       const handlers = this.eventHandlers.get(`${msg.namespace}.${msg.action}`);
       handlers?.forEach((h) => h(msg.payload));
     }
   }
 
-  async request<T>(namespace: string, action: string, payload?: unknown): Promise<T> {
+  async request<T>(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+  ): Promise<T> {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= this.retryAttempts; attempt++) {
@@ -88,18 +111,37 @@ export class SdkTransport {
       }
     }
 
-    throw lastError ?? new Error('Request failed');
+    throw lastError ?? new Error("Request failed");
   }
 
-  private sendRequest<T>(namespace: string, action: string, payload?: unknown): Promise<T> {
-    const msg = createMessage('request', namespace, action, this.moduleId, 'shell', payload, {
-      traceId: this.traceId,
-    });
+  private sendRequest<T>(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+  ): Promise<T> {
+    const msg = createMessage(
+      "request",
+      namespace,
+      action,
+      this.moduleId,
+      "shell",
+      payload,
+      {
+        traceId: this.traceId,
+      },
+    );
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(msg.id);
-        reject(new SdkError({ code: 'TIMEOUT', message: `Request ${namespace}.${action} timed out`, retryable: true }));
+        //CHANGE
+        reject(
+          SdkError.create(
+            ErrorCodes.REQUEST_TIMEOUT,
+            `Request ${namespace}.${action} timed out`,
+            true,
+          ),
+        );
       }, this.timeout);
 
       this.pending.set(msg.id, {
@@ -113,19 +155,36 @@ export class SdkTransport {
   }
 
   private sendMessage(msg: PlatformMessage): void {
-    window.parent.postMessage(msg, '*');
+    //CHANGE
+    if (typeof window === "undefined") {
+      throw SdkError.create(
+        ErrorCodes.NO_WINDOW,
+        "Cannot send message outside browser environment",
+      );
+    }
+    const origin = this.targetOrigin;
+    window.parent.postMessage(msg, origin);
   }
 
   async handshake(): Promise<void> {
-    const msg = createMessage('handshake', 'handshake', '', this.moduleId, 'shell', {
-      moduleId: this.moduleId,
-      sdkVersion: '2.0.0',
-    });
+    //CHANGE
+    const msg = createMessage(
+      "handshake",
+      "handshake",
+      "",
+      this.moduleId,
+      "shell",
+      {
+        moduleId: this.moduleId,
+        sdkVersion: PROTOCOL_VERSION,
+      },
+    );
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(msg.id);
-        reject(new Error('Handshake timed out'));
+        // CHANGE
+        reject(SdkError.create(ErrorCodes.HANDSHAKE_TIMEOUT, 'Handshake timed out', true))
       }, this.timeout);
 
       this.pending.set(msg.id, {

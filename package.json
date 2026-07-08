@@ -32,12 +32,16 @@
     "build:registry": "esbuild src/cdn.ts --bundle --format=iife --platform=browser --target=es2020 --outfile=dist/mini-app-sdk.registry.global.js",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "prepublishOnly": "pnpm run build",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "esbuild": "^0.27.7",
+    "jsdom": "^29.1.1",
     "tsup": "^8.5.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   }
 }

@@ -29,9 +29,10 @@ import type {
   DeviceNotificationResult,
   DeviceNetworkResult,
   DeviceInfoResult,
-} from './types';
-import { PROTOCOL_VERSION } from './constants';
-import { SdkTransport } from './transport';
+} from "./types";
+import { PROTOCOL_VERSION } from "./constants";
+import { SdkTransport } from "./transport";
+import { SdkError, ErrorCodes } from "./errors";
 
 export class MiniAppSdk implements MiniAppSdkInterface {
   readonly moduleId: string;
@@ -70,9 +71,18 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
+    if (typeof window === "undefined") {
+      throw SdkError.create(
+        ErrorCodes.NO_WINDOW,
+        "MiniAppSdk cannot initialize outside browser environment",
+      );
+    }
     this.transport.start();
     await this.transport.handshake();
-    this.platformType = await this.transport.request<PlatformTypeLiteral>('platform', 'getType');
+    this.platformType = await this.transport.request<PlatformTypeLiteral>(
+      "platform",
+      "getType",
+    );
     this.initialized = true;
   }
 
@@ -85,7 +95,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   on(event: string, handler: EventHandler): () => void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
-      this.transport.request('event', 'subscribe', { eventType: event }).catch(() => {});
+      this.transport
+        .request("event", "subscribe", { eventType: event })
+        .catch(() => {});
     }
     this.eventHandlers.get(event)!.add(handler);
     const transportUnsub = this.transport.onEvent(event, handler);
@@ -97,55 +109,70 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   }
 
   // platform module needs access to the mutable platformType
-  private platformType: PlatformTypeLiteral = 'WEB';
+  private platformType: PlatformTypeLiteral = "WEB";
 
   private createAuthModule(): AuthSdkModule {
     return {
-      getUser: () => this.transport.request<PlatformUser | null>('auth', 'getUser'),
-      isAuthenticated: () => this.transport.request<boolean>('auth', 'isAuthenticated'),
-      logout: () => this.transport.request<void>('auth', 'logout'),
+      getUser: () =>
+        this.transport.request<PlatformUser | null>("auth", "getUser"),
+      isAuthenticated: () =>
+        this.transport.request<boolean>("auth", "isAuthenticated"),
+      logout: () => this.transport.request<void>("auth", "logout"),
     };
   }
 
   private createPermissionsModule(): PermissionsSdkModule {
     return {
-      has: (permission) => this.transport.request<boolean>('permissions', 'has', { permission }),
-      list: () => this.transport.request<string[]>('permissions', 'list'),
+      has: (permission) =>
+        this.transport.request<boolean>("permissions", "has", { permission }),
+      list: () => this.transport.request<string[]>("permissions", "list"),
     };
   }
 
   private createFlagsModule(): FlagsSdkModule {
     return {
-      isEnabled: (flag) => this.transport.request<boolean>('flags', 'isEnabled', { flag }),
-      getAll: () => this.transport.request<Record<string, boolean>>('flags', 'getAll'),
+      isEnabled: (flag) =>
+        this.transport.request<boolean>("flags", "isEnabled", { flag }),
+      getAll: () =>
+        this.transport.request<Record<string, boolean>>("flags", "getAll"),
     };
   }
 
   private createConfigModule(): ConfigSdkModule {
     return {
-      get: <T = unknown>(key: string) => this.transport.request<T | undefined>('config', 'get', { key }),
-      getAll: () => this.transport.request<Record<string, unknown>>('config', 'getAll'),
+      get: <T = unknown>(key: string) =>
+        this.transport.request<T | undefined>("config", "get", { key }),
+      getAll: () =>
+        this.transport.request<Record<string, unknown>>("config", "getAll"),
     };
   }
 
   private createNavigationModule(): NavigationSdkModule {
     return {
-      navigate: (target: NavigationTarget) => this.transport.request<void>('navigation', 'navigate', target),
-      getCurrent: () => this.transport.request<NavigationState>('navigation', 'getCurrent'),
+      navigate: (target: NavigationTarget) =>
+        this.transport.request<void>("navigation", "navigate", target),
+      getCurrent: () =>
+        this.transport.request<NavigationState>("navigation", "getCurrent"),
     };
   }
 
   private createTelemetryModule(): TelemetrySdkModule {
     return {
       log: (level, message, context) => {
-        this.transport.request('telemetry', 'log', { level, message, context }).catch(() => {});
+        this.transport
+          .request("telemetry", "log", { level, message, context })
+          .catch(() => {});
       },
       track: (event, properties) => {
-        this.transport.request('telemetry', 'track', { event, properties }).catch(() => {});
+        this.transport
+          .request("telemetry", "track", { event, properties })
+          .catch(() => {});
       },
       error: (error, context) => {
         const message = error instanceof Error ? error.message : error;
-        this.transport.request('telemetry', 'error', { message, context }).catch(() => {});
+        this.transport
+          .request("telemetry", "error", { message, context })
+          .catch(() => {});
       },
     };
   }
@@ -156,44 +183,118 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       get type() {
         return self.platformType;
       },
-      isWeb: () => self.platformType === 'WEB',
-      isAndroid: () => self.platformType === 'ANDROID',
-      isIOS: () => self.platformType === 'IOS',
-      isMobile: () => self.platformType !== 'WEB',
+      isWeb: () => self.platformType === "WEB",
+      isAndroid: () => self.platformType === "ANDROID",
+      isIOS: () => self.platformType === "IOS",
+      isMobile: () => self.platformType !== "WEB",
     };
   }
 
   private createDeviceModule(): DeviceSdkModule {
     return {
-      location: (options) => this.transport.request<DeviceLocationResult>('device', 'location', options),
-      camera: (options) => this.transport.request<DeviceCameraResult>('device', 'camera', options),
-      gallery: (options) => this.transport.request<DeviceGalleryResult>('device', 'gallery', options),
-      files: (options) => this.transport.request<DeviceFilesResult>('device', 'files', options),
-      biometric: (options) => this.transport.request<DeviceBiometricResult>('device', 'biometric', options),
-      notifications: (options) => this.transport.request<DeviceNotificationResult>('device', 'notifications', options),
-      network: () => this.transport.request<DeviceNetworkResult>('device', 'network'),
+      location: (options) =>
+        this.transport.request<DeviceLocationResult>(
+          "device",
+          "location",
+          options,
+        ),
+      camera: (options) =>
+        this.transport.request<DeviceCameraResult>("device", "camera", options),
+      gallery: (options) =>
+        this.transport.request<DeviceGalleryResult>(
+          "device",
+          "gallery",
+          options,
+        ),
+      files: (options) =>
+        this.transport.request<DeviceFilesResult>("device", "files", options),
+      biometric: (options) =>
+        this.transport.request<DeviceBiometricResult>(
+          "device",
+          "biometric",
+          options,
+        ),
+      notifications: (options) =>
+        this.transport.request<DeviceNotificationResult>(
+          "device",
+          "notifications",
+          options,
+        ),
+      network: () =>
+        this.transport.request<DeviceNetworkResult>("device", "network"),
       storage: {
         get: (key) =>
-          this.transport.request<{ value: string | null }>('device', 'storage', { action: 'get', key }).then((r) => r?.value ?? null),
-        set: (key, value) => this.transport.request('device', 'storage', { action: 'set', key, value }),
-        remove: (key) => this.transport.request('device', 'storage', { action: 'remove', key }),
+          this.transport
+            .request<{
+              value: string | null;
+            }>("device", "storage", { action: "get", key })
+            .then((r) => r?.value ?? null),
+        set: (key, value) =>
+          this.transport.request("device", "storage", {
+            action: "set",
+            key,
+            value,
+          }),
+        remove: (key) =>
+          this.transport.request("device", "storage", {
+            action: "remove",
+            key,
+          }),
       },
-      info: () => this.transport.request<DeviceInfoResult>('device', 'info'),
+      info: () => this.transport.request<DeviceInfoResult>("device", "info"),
     };
   }
 
   private createHttpModule(): HttpSdkModule {
     return {
-      get: <T = unknown>(endpoint: string, query?: Record<string, string>, headers?: Record<string, string>) =>
-        this.transport.request<HttpResult<T>>('http', 'get', { endpoint, query, headers } as HttpGetParams),
-      post: <T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
-        this.transport.request<HttpResult<T>>('http', 'post', { endpoint, body, headers } as HttpPostParams),
-      put: <T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
-        this.transport.request<HttpResult<T>>('http', 'put', { endpoint, body, headers } as HttpPutParams),
-      patch: <T = unknown>(endpoint: string, body?: unknown, headers?: Record<string, string>) =>
-        this.transport.request<HttpResult<T>>('http', 'patch', { endpoint, body, headers } as HttpPatchParams),
-      delete: <T = unknown>(endpoint: string, headers?: Record<string, string>) =>
-        this.transport.request<HttpResult<T>>('http', 'delete', { endpoint, headers } as HttpDeleteParams),
+      get: <T = unknown>(
+        endpoint: string,
+        query?: Record<string, string>,
+        headers?: Record<string, string>,
+      ) =>
+        this.transport.request<HttpResult<T>>("http", "get", {
+          endpoint,
+          query,
+          headers,
+        } as HttpGetParams),
+      post: <T = unknown>(
+        endpoint: string,
+        body?: unknown,
+        headers?: Record<string, string>,
+      ) =>
+        this.transport.request<HttpResult<T>>("http", "post", {
+          endpoint,
+          body,
+          headers,
+        } as HttpPostParams),
+      put: <T = unknown>(
+        endpoint: string,
+        body?: unknown,
+        headers?: Record<string, string>,
+      ) =>
+        this.transport.request<HttpResult<T>>("http", "put", {
+          endpoint,
+          body,
+          headers,
+        } as HttpPutParams),
+      patch: <T = unknown>(
+        endpoint: string,
+        body?: unknown,
+        headers?: Record<string, string>,
+      ) =>
+        this.transport.request<HttpResult<T>>("http", "patch", {
+          endpoint,
+          body,
+          headers,
+        } as HttpPatchParams),
+      delete: <T = unknown>(
+        endpoint: string,
+        headers?: Record<string, string>,
+      ) =>
+        this.transport.request<HttpResult<T>>("http", "delete", {
+          endpoint,
+          headers,
+        } as HttpDeleteParams),
     };
   }
 }
@@ -206,13 +307,39 @@ export function createMiniAppSdk(options: MiniAppSdkOptions): MiniAppSdk {
 
 export function getMiniAppSdk(): MiniAppSdk {
   if (!globalSdk) {
-    throw new Error('Mini App SDK not initialized. Call initMiniAppSdk() first.');
+    throw new Error(
+      "Mini App SDK not initialized. Call initMiniAppSdk() first.",
+    );
   }
   return globalSdk;
 }
 
-export async function initMiniAppSdk(options: MiniAppSdkOptions): Promise<MiniAppSdk> {
+export async function initMiniAppSdk(
+  options: MiniAppSdkOptions,
+): Promise<MiniAppSdk> {
+  // CHANGE
+  if (globalSdk) {
+    globalSdk.destroy();
+  }
   globalSdk = new MiniAppSdk(options);
   await globalSdk.initialize();
   return globalSdk;
+}
+//CHANGE
+/** @deprecated Use `initMiniAppSdk()` instead. Will be removed in v4.0.0. */ 
+export async function initBridge(
+  options: MiniAppSdkOptions,
+): Promise<MiniAppSdk> {
+  console.warn(
+    "[MiniAppSDK] initBridge is deprecated. Use initMiniAppSdk instead.",
+  );
+  return initMiniAppSdk(options);
+}
+/** @deprecated Access via `sdk.platform.type` instead. Will be removed in v4.0.0. */ 
+export function getPlatformType(): Promise<PlatformTypeLiteral> {
+  console.warn(
+    "[MiniAppSDK] getPlatformType is deprecated. Use sdk.platform.type instead.",
+  );
+  const sdk = getMiniAppSdk();
+  return sdk.platform.type as unknown as Promise<PlatformTypeLiteral>;
 }

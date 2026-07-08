@@ -1,5 +1,5 @@
-export { SdkError } from './errors';
-export { MiniAppSdk, createMiniAppSdk, getMiniAppSdk, initMiniAppSdk } from './sdk';
+export { SdkError, ErrorCodes } from './errors';
+export { MiniAppSdk, createMiniAppSdk, getMiniAppSdk, initMiniAppSdk, initBridge, getPlatformType } from './sdk';
 export { SdkTransport } from './transport';
 export { PROTOCOL_VERSION, PLATFORM_EVENT_NAME, MESSAGE_CHANNEL } from './constants';
 export { createMessage, generateId, delay, isPlatformMessage } from './utils';
