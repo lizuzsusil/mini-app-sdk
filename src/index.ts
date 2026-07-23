@@ -28,6 +28,7 @@ export type {
   PlatformUser,
   NavigationTarget,
   NavigationState,
+  DeviceLocationOptions,
   DeviceLocationResult,
   DeviceCameraResult,
   DeviceGalleryResult,

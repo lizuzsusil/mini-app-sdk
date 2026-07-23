@@ -98,7 +98,7 @@ export interface PlatformSdkModule {
 }
 
 export interface DeviceSdkModule {
-  location(options?: Record<string, unknown>): Promise<DeviceLocationResult>;
+  location(options?: DeviceLocationOptions): Promise<DeviceLocationResult>;
   camera(options?: Record<string, unknown>): Promise<DeviceCameraResult>;
   gallery(options?: Record<string, unknown>): Promise<DeviceGalleryResult>;
   files(options?: Record<string, unknown>): Promise<DeviceFilesResult>;
@@ -183,6 +183,11 @@ export interface NavigationTarget {
 export interface NavigationState {
   current: string;
   history: string[];
+}
+
+export interface DeviceLocationOptions {
+  reason?: string;
+  highAccuracy?: boolean;
 }
 
 export interface DeviceLocationResult {
