@@ -40,7 +40,7 @@ describe('RpcClient', () => {
     expect(sent.type).toBe('request');
     expect(sent.source).toBe('test-mini-app');
     expect(sent.target).toBe(HOST_TARGET);
-    expect(sent.id).toBeTruthy();
+    expect(sent.requestId).toBeTruthy();
   });
 
   it('resolves a request when a matching response arrives', async () => {
@@ -52,7 +52,7 @@ describe('RpcClient', () => {
     const sent = transport.lastSent!;
 
     transport.simulateIncoming(
-      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { id: 'user-1' }, { id: sent.id, traceId: sent.traceId })
+      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { id: 'user-1' }, { requestId: sent.requestId, traceId: sent.traceId })
     );
 
     await expect(promise).resolves.toEqual({ id: 'user-1' });
@@ -67,7 +67,7 @@ describe('RpcClient', () => {
     const sent = transport.lastSent!;
 
     transport.simulateIncoming(
-      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'someone-elses-mini-app', { id: 'nope' }, { id: sent.id, traceId: sent.traceId })
+      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'someone-elses-mini-app', { id: 'nope' }, { requestId: sent.requestId, traceId: sent.traceId })
     );
 
     await expect(promise).rejects.toBeInstanceOf(TimeoutError);
@@ -89,7 +89,7 @@ describe('RpcClient', () => {
         HOST_TARGET,
         'test-mini-app',
         undefined,
-        { id: sent.id, traceId: sent.traceId, error: { code: 'PERMISSION_DENIED', message: 'nope', retryable: false } }
+        { requestId: sent.requestId, traceId: sent.traceId, error: { code: 'PERMISSION_DENIED', message: 'nope', retryable: false } }
       )
     );
 
@@ -127,7 +127,7 @@ describe('RpcClient', () => {
     expect(sent.type).toBe('handshake');
 
     transport.simulateIncoming(
-      createMessage('handshake', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { status: 'ok' }, { id: sent.id, traceId: sent.traceId })
+      createMessage('handshake', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { status: 'ok' }, { requestId: sent.requestId, traceId: sent.traceId })
     );
 
     await expect(promise).resolves.toBeUndefined();
@@ -162,7 +162,7 @@ describe('RpcClient', () => {
         HOST_TARGET,
         'test-mini-app',
         { status: 'ok', protocolVersion: '3.0.0', capabilities: ['auth', 'http'] },
-        { id: sent.id, traceId: sent.traceId }
+        { requestId: sent.requestId, traceId: sent.traceId }
       )
     );
     await promise;
@@ -178,7 +178,7 @@ describe('RpcClient', () => {
     const promise = client.handshake();
     const sent = transport.lastSent!;
     transport.simulateIncoming(
-      createMessage('handshake', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { status: 'ok' }, { id: sent.id, traceId: sent.traceId })
+      createMessage('handshake', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { status: 'ok' }, { requestId: sent.requestId, traceId: sent.traceId })
     );
     await promise;
 
@@ -201,7 +201,7 @@ describe('RpcClient', () => {
         HOST_TARGET,
         'test-mini-app',
         { status: 'ok', protocolVersion: '4.0.0' },
-        { id: sent.id, traceId: sent.traceId }
+        { requestId: sent.requestId, traceId: sent.traceId }
       )
     );
 
@@ -223,7 +223,7 @@ describe('RpcClient', () => {
         HOST_TARGET,
         'test-mini-app',
         { status: 'ok', protocolVersion: '3.9.2' },
-        { id: sent.id, traceId: sent.traceId }
+        { requestId: sent.requestId, traceId: sent.traceId }
       )
     );
 
@@ -245,7 +245,7 @@ describe('RpcClient', () => {
         HOST_TARGET,
         'test-mini-app',
         { status: 'rejected', reason: 'module not registered' },
-        { id: sent.id, traceId: sent.traceId }
+        { requestId: sent.requestId, traceId: sent.traceId }
       )
     );
 
@@ -261,7 +261,7 @@ describe('RpcClient', () => {
     const sent = transport.lastSent!;
 
     transport.simulateIncoming(
-      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { id: 'x' }, { id: sent.id, traceId: sent.traceId, version: '99.0.0' })
+      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { id: 'x' }, { requestId: sent.requestId, traceId: sent.traceId, version: '99.0.0' })
     );
 
     // the incompatible-version response is dropped, so the request still times out

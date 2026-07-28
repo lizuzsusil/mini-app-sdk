@@ -3,7 +3,7 @@ import { generateId } from '../utils';
 import type { MessageType, PlatformError, PlatformMessage } from './message.types';
 
 export interface CreateMessageOptions {
-  id?: string;
+  requestId?: string;
   traceId?: string;
   version?: string;
   error?: PlatformError;
@@ -26,7 +26,7 @@ export function createMessage<TPayload = unknown>(
 ): PlatformMessage<TPayload> {
   return {
     channel: MESSAGE_CHANNEL,
-    id: options?.id ?? generateId(),
+    requestId: options?.requestId ?? generateId(),
     type,
     namespace,
     action,

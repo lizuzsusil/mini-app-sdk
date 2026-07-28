@@ -45,7 +45,7 @@ class ScriptedTransport implements Transport {
 
   reply(request: PlatformMessage, payload: unknown): void {
     const response = createMessage('response', request.namespace, request.action, HOST_TARGET, request.source, payload, {
-      id: request.id,
+      requestId: request.requestId,
       traceId: request.traceId,
     });
     queueMicrotask(() => this.onMessage?.(response));

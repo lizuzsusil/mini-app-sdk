@@ -19,6 +19,7 @@ export type {
   NavigationSdkModule,
   NavigationTarget,
   NavigationState,
+  HostDescriptor,
   PlatformSdkModule,
   PlatformTypeLiteral,
   DeviceSdkModule,

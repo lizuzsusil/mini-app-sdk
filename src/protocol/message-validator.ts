@@ -55,8 +55,8 @@ export function validatePlatformMessage(data: unknown): MessageValidationResult 
     return { valid: false, reason: 'missing or invalid "channel"' };
   }
 
-  if (!isNonEmptyString(data.id)) {
-    return { valid: false, reason: 'missing or invalid "id" (correlation id)' };
+  if (!isNonEmptyString(data.requestId)) {
+    return { valid: false, reason: 'missing or invalid "requestId" (correlation id)' };
   }
 
   if (typeof data.type !== 'string' || !MESSAGE_TYPES.has(data.type)) {

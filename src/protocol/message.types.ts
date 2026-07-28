@@ -23,7 +23,7 @@ export interface PlatformError {
  */
 export interface PlatformMessage<TPayload = unknown> {
   channel: string;
-  id: string;
+  requestId: string;
   type: MessageType;
   namespace: string;
   action: string;

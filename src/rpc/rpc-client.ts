@@ -147,11 +147,11 @@ export class RpcClient {
 
     return new Promise<void>((resolvePromise, rejectPromise) => {
       const timer = setTimeout(() => {
-        this.pending.delete(message.id);
+        this.pending.delete(message.requestId);
         rejectPromise(new HandshakeError({ message: 'Handshake with host timed out', timedOut: true }));
       }, this.timeout);
 
-      this.pending.set(message.id, {
+      this.pending.set(message.requestId, {
         resolve: (ackPayload) => this.completeHandshake(ackPayload, resolvePromise, rejectPromise),
         reject: (error) => rejectPromise(error instanceof HandshakeError ? error : new HandshakeError({ message: error.message, cause: error })),
         timer,
@@ -159,7 +159,7 @@ export class RpcClient {
         action: ACTIONS.HANDSHAKE.CONNECT,
       });
 
-      this.sendOrFail(message, () => this.pending.delete(message.id));
+      this.sendOrFail(message, () => this.pending.delete(message.requestId));
     });
   }
 
@@ -307,11 +307,11 @@ export class RpcClient {
 
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.pending.delete(message.id);
+        this.pending.delete(message.requestId);
         reject(new TimeoutError({ namespace, action, timeoutMs: this.timeout }));
       }, this.timeout);
 
-      this.pending.set(message.id, {
+      this.pending.set(message.requestId, {
         resolve: resolve as (value: unknown) => void,
         reject,
         timer,
@@ -319,7 +319,7 @@ export class RpcClient {
         action,
       });
 
-      this.sendOrFail(message, () => this.pending.delete(message.id));
+      this.sendOrFail(message, () => this.pending.delete(message.requestId));
     });
   }
 
@@ -327,7 +327,7 @@ export class RpcClient {
     try {
       this.transport.send(message);
     } catch (error) {
-      const pending = this.pending.get(message.id);
+      const pending = this.pending.get(message.requestId);
       onFailure();
       const err = error instanceof Error ? error : new Error(String(error));
       if (pending) {
@@ -351,11 +351,11 @@ export class RpcClient {
     }
 
     if (message.type === 'response' || message.type === 'handshake') {
-      const pending = this.pending.get(message.id);
+      const pending = this.pending.get(message.requestId);
       if (!pending) return;
 
       clearTimeout(pending.timer);
-      this.pending.delete(message.id);
+      this.pending.delete(message.requestId);
 
       if (message.error) {
         pending.reject(new ProtocolError({ reason: 'host-rejected', platformError: message.error }));

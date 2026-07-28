@@ -32,3 +32,10 @@ export const HOST_TARGET = 'shell';
  * value instead of a specific `moduleId`.
  */
 export const BROADCAST_TARGET = '*';
+
+/**
+ * Global key the shell sets before mounting a mini-app with the static host
+ * descriptor (type, version, capabilities, sdkVersion). The SDK reads this
+ * at construction time. See `HostDescriptor` in `types/platform.types.ts`.
+ */
+export const HOST_DESCRIPTOR_GLOBAL_KEY = '__GSA_HOST_DESCRIPTOR__';

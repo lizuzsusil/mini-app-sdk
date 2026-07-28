@@ -2,7 +2,7 @@ import type { AuthSdkModule, PermissionsSdkModule } from './auth.types';
 import type { ConfigSdkModule, FlagsSdkModule } from './config.types';
 import type { EventHandler } from './common.types';
 import type { NavigationSdkModule } from './navigation.types';
-import type { PlatformSdkModule } from './platform.types';
+import type { HostDescriptor, PlatformSdkModule } from './platform.types';
 import type { DeviceSdkModule } from './device.types';
 import type { HttpSdkModule } from './http.types';
 import type { RpcClient, RpcMiddleware } from '../rpc';
@@ -17,6 +17,8 @@ export interface MiniAppSdkInterface {
   readonly moduleId: string;
   readonly version: string;
   readonly traceId: string;
+  /** Static host descriptor injected by the shell before mount, or null if running outside a GSA shell. */
+  readonly hostDescriptor: HostDescriptor | null;
   /**
    * Namespaces the host confirmed it supports, negotiated during the
    * handshake in `initialize()`. Empty until `initialize()` resolves. A
@@ -38,6 +40,9 @@ export interface MiniAppSdkInterface {
   initialize(): Promise<void>;
   destroy(): void;
   on(event: string, handler: EventHandler): () => void;
+
+  /** Publishes an event to the shell's internal event bus. Other shell components may listen. Mini-apps cannot subscribe to each other directly. */
+  emit(event: string, data?: unknown): void;
 
   /** Registers a middleware wrapping every request made from this point forward. See `rpc/middleware.ts`. */
   use(middleware: RpcMiddleware): void;

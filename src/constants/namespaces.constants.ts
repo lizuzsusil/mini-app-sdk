@@ -86,6 +86,7 @@ export const ACTIONS = {
   EVENT: {
     SUBSCRIBE: 'subscribe',
     UNSUBSCRIBE: 'unsubscribe',
+    EMIT: 'emit',
   },
   HANDSHAKE: {
     CONNECT: 'connect',

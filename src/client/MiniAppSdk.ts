@@ -1,7 +1,7 @@
 import { SdkError } from '../errors';
 import type { Logger } from '../logging';
 import { noopLogger } from '../logging';
-import { ACTIONS, NAMESPACES, PROTOCOL_VERSION } from '../constants';
+import { ACTIONS, HOST_DESCRIPTOR_GLOBAL_KEY, NAMESPACES, PROTOCOL_VERSION } from '../constants';
 import {
   ModuleRegistry,
   createAuthModule,
@@ -25,6 +25,7 @@ import type {
   DeviceSdkModule,
   EventHandler,
   FlagsSdkModule,
+  HostDescriptor,
   HttpSdkModule,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
@@ -71,6 +72,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly version = PROTOCOL_VERSION;
   readonly traceId: string;
 
+  readonly hostDescriptor: HostDescriptor | null;
+
   readonly auth: AuthSdkModule;
   readonly permissions: PermissionsSdkModule;
   readonly flags: FlagsSdkModule;
@@ -92,6 +95,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   constructor(options: MiniAppSdkOptions, dependencies: MiniAppSdkDependencies = {}) {
     this.moduleId = options.moduleId;
     this.logger = dependencies.logger ?? noopLogger;
+
+    this.hostDescriptor = typeof window !== 'undefined'
+      ? (window as any)[HOST_DESCRIPTOR_GLOBAL_KEY] ?? null
+      : null;
 
     const transport =
       dependencies.transport ?? new DefaultTransport({ logger: this.logger, allowedOrigin: dependencies.allowedOrigin });
@@ -194,6 +201,15 @@ export class MiniAppSdk implements MiniAppSdkInterface {
    */
   on(event: string, handler: EventHandler): () => void {
     return this.rpc.onEvent(event, handler);
+  }
+
+  /** @inheritdoc */
+  emit(event: string, data?: unknown): void {
+    this.rpc.request(NAMESPACES.EVENT, ACTIONS.EVENT.EMIT, { event, data }).catch((error: unknown) => {
+      this.logger.warn(`Emit event "${event}" failed`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   /**
