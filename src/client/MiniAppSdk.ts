@@ -1,7 +1,7 @@
 import { SdkError } from '../errors';
 import type { Logger } from '../logging';
 import { noopLogger } from '../logging';
-import { ACTIONS, HOST_DESCRIPTOR_GLOBAL_KEY, NAMESPACES, PROTOCOL_VERSION } from '../constants';
+import { ACTIONS, HOST_DESCRIPTOR_GLOBAL_KEY, NAMESPACES, PROTOCOL_VERSION, SDK_GLOBAL_KEY } from '../constants';
 import {
   ModuleRegistry,
   createApiModule,
@@ -94,6 +94,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private readonly registry = new ModuleRegistry();
   private readonly setPlatformType: (type: PlatformTypeLiteral) => void;
 
+  private readonly registerGlobal: boolean;
   private initialized = false;
   private destroyed = false;
   private initializePromise: Promise<void> | null = null;
@@ -147,6 +148,13 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     const platformHandle = createPlatformModule('web');
     this.platform = platformHandle.module;
     this.setPlatformType = platformHandle.setType;
+
+    this.registerGlobal = options.registerGlobal ?? false;
+    if (this.registerGlobal) {
+      if (typeof globalThis !== 'undefined') {
+        (globalThis as any)[SDK_GLOBAL_KEY] = this;
+      }
+    }
   }
 
   /**
@@ -200,6 +208,11 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.rpc.stop();
     this.initialized = false;
     this.destroyed = true;
+    if (this.registerGlobal && typeof globalThis !== 'undefined') {
+      if ((globalThis as any)[SDK_GLOBAL_KEY] === this) {
+        delete (globalThis as any)[SDK_GLOBAL_KEY];
+      }
+    }
     this.logger.info(`MiniAppSdk("${this.miniAppId}") destroyed`);
   }
 

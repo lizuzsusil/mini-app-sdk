@@ -39,3 +39,11 @@ export const BROADCAST_TARGET = '*';
  * at construction time. See `HostDescriptor` in `types/platform.types.ts`.
  */
 export const HOST_DESCRIPTOR_GLOBAL_KEY = '__GSA_HOST_DESCRIPTOR__';
+
+/**
+ * Global key the SDK assigns itself to when `registerGlobal` is enabled.
+ * This gives the shell a well-known reference for one-mini-app-per-tab
+ * scenarios without requiring the factory return value to be stored.
+ * The reference is non-reassignable and deleted on `destroy()`.
+ */
+export const SDK_GLOBAL_KEY = '__GSA_SDK__';

@@ -5,9 +5,6 @@ import type { CreateInstanceOptions, MiniAppSdkOptions } from './types';
 /** Map of miniAppId to MiniAppSdk instances */
 const instances = new Map<string, MiniAppSdk>();
 
-/** Tracks the miniAppId of the most recently created SDK instance */
-let activeModuleId: string | null = null;
-
 /**
  * Global registry for managing MiniAppSdk lifecycle across a page.
  * Exposed on window as `getMiniAppBridge` when running in a browser.
@@ -37,6 +34,7 @@ const registry = {
 
     const opts: MiniAppSdkOptions = {
       miniAppId,
+      registerGlobal: true,
       timeout: sdkOptions?.timeout,
       retryAttempts: sdkOptions?.retryAttempts,
       retryDelayMs: sdkOptions?.retryDelayMs,
@@ -52,7 +50,6 @@ const registry = {
       await sdk.initialize();
 
       instances.set(miniAppId, sdk);
-      activeModuleId = miniAppId;
 
       return sdk;
     } catch (error) {
@@ -61,30 +58,11 @@ const registry = {
     }
   },
 
-  /**
-   * Returns the currently active MiniAppSdk instance, or null if none exists.
-   * The active instance is the one most recently created via createInstance.
-   */
-  getActiveInstance() {
-    return activeModuleId ? (instances.get(activeModuleId) ?? null) : null;
-  },
-
-  /**
-   * Destroys the MiniAppSdk instance for the given miniAppId and removes it
-   * from the registry. If the destroyed instance was the active one, the
-   * most recently created remaining instance becomes active.
-   *
-   * @param miniAppId - The module whose instance should be destroyed
-   */
   destroyInstance(miniAppId: string) {
     const sdk = instances.get(miniAppId);
     if (sdk) {
       sdk.destroy();
       instances.delete(miniAppId);
-      if (activeModuleId === miniAppId) {
-        const remainingKeys = Array.from(instances.keys());
-        activeModuleId = remainingKeys[remainingKeys.length - 1] ?? null;
-      }
     }
   },
 };
