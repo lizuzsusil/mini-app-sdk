@@ -2,23 +2,17 @@
   "name": "sewa-sdk",
   "version": "1.0.0-beta",
   "description": "Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell.",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/sewa-sdk.js",
+  "module": "./dist/sewa-sdk.mjs",
+  "types": "./dist/sewa-sdk.d.ts",
   "browser": "./dist/sewa-sdk.min.js",
   "unpkg": "./dist/sewa-sdk.min.js",
   "jsdelivr": "./dist/sewa-sdk.min.js",
   "exports": {
     ".": {
       "browser": "./dist/sewa-sdk.min.js",
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    },
-    "./testing": {
-      "types": "./dist/testing/index.d.ts",
-      "import": "./dist/testing/index.mjs",
-      "require": "./dist/testing/index.js"
+      "import": "./dist/sewa-sdk.mjs",
+      "require": "./dist/sewa-sdk.js"
     }
   },
   "files": [
@@ -30,7 +24,7 @@
   "sideEffects": false,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build:lib": "tsup src/index.ts src/testing/index.ts --format cjs,esm --dts --clean",
+    "build:lib": "tsup src/index.ts --format cjs,esm --clean && mv dist/index.js dist/sewa-sdk.js && mv dist/index.mjs dist/sewa-sdk.mjs",
     "build:cdn": "esbuild src/cdn.ts --bundle --format=iife --platform=browser --target=es2020 --minify --outfile=dist/sewa-sdk.min.js",
     "build": "npm run build:lib && npm run build:cdn",
     "test": "vitest run",

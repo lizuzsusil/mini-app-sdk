@@ -37,11 +37,14 @@ export class SdkError extends Error {
   readonly details: Record<string, unknown> | undefined;
 
   constructor(options: SdkErrorOptions) {
-    super(options.message, options.cause !== undefined ? { cause: options.cause } : undefined);
+    super(options.message);
     this.name = 'SdkError';
     this.code = options.code;
     this.retryable = options.retryable ?? false;
     this.details = options.details;
+    if (options.cause !== undefined) {
+      (this as any).cause = options.cause;
+    }
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }

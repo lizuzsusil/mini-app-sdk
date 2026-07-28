@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { composeMiddleware } from './middleware';
-import type { RpcMiddleware, RpcMiddlewareContext } from './middleware';
+import type { RpcMiddleware, RpcMiddlewareContext, RpcNext } from './middleware';
 
 const baseContext: RpcMiddlewareContext = { namespace: 'auth', action: 'getUser', payload: undefined, attempt: 0 };
 
@@ -35,7 +35,9 @@ describe('composeMiddleware', () => {
 
   it('lets a middleware short-circuit by not calling next()', async () => {
     let terminalCalled = false;
-    const shortCircuit: RpcMiddleware = async () => 'short-circuited';
+    const shortCircuit: RpcMiddleware = async <T>(_ctx: RpcMiddlewareContext, _next: RpcNext<T>): Promise<T> => {
+      return 'short-circuited' as T;
+    };
 
     const result = await composeMiddleware([shortCircuit], baseContext, async () => {
       terminalCalled = true;
@@ -47,9 +49,9 @@ describe('composeMiddleware', () => {
   });
 
   it('lets a middleware transform the result', async () => {
-    const uppercase: RpcMiddleware = async (_ctx, next) => {
-      const result = await next();
-      return typeof result === 'string' ? result.toUpperCase() : result;
+    const uppercase: RpcMiddleware = async <T>(_ctx: RpcMiddlewareContext, _next: RpcNext<T>): Promise<T> => {
+      const result = await _next();
+      return (typeof result === 'string' ? result.toUpperCase() : result) as T;
     };
 
     const result = await composeMiddleware([uppercase], baseContext, async () => 'hello');
