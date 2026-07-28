@@ -1,0 +1,12 @@
+export { createAuthModule } from './auth.module';
+export { createPermissionsModule } from './permissions.module';
+export { createFlagsModule } from './flags.module';
+export { createConfigModule } from './config.module';
+export { createNavigationModule } from './navigation.module';
+export { createTelemetryModule } from './telemetry.module';
+export { createPlatformModule } from './platform.module';
+export type { PlatformModuleHandle } from './platform.module';
+export { createDeviceModule } from './device.module';
+export { createHttpModule } from './http.module';
+export { ModuleRegistry } from './module-registry';
+export type { ModuleFactory } from './module-registry';

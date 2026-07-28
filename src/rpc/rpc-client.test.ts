@@ -1,0 +1,309 @@
+import { describe, expect, it, vi } from 'vitest';
+import { RpcClient } from './rpc-client';
+import { FakeTransport } from '../testing/fake-transport';
+import { HandshakeError, ProtocolError, TimeoutError } from '../errors';
+import { ACTIONS, HOST_TARGET, NAMESPACES } from '../constants';
+import { createMessage } from '../protocol';
+
+function makeClient(transport: FakeTransport, overrides: Partial<{ timeout: number; retryAttempts: number; retryDelayMs: number }> = {}) {
+  return new RpcClient(transport, {
+    moduleId: 'test-mini-app',
+    timeout: overrides.timeout ?? 1000,
+    retryAttempts: overrides.retryAttempts ?? 2,
+    retryDelayMs: overrides.retryDelayMs ?? 1,
+  });
+}
+
+describe('RpcClient', () => {
+  it('starts and stops the underlying transport', () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+
+    client.start();
+    expect(transport.started).toBe(true);
+
+    client.stop();
+    expect(transport.stopCalls).toBe(1);
+  });
+
+  it('sends a well-formed request envelope addressed to the host', () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    void client.request('auth', 'getUser');
+
+    expect(transport.sent).toHaveLength(1);
+    const sent = transport.lastSent!;
+    expect(sent.namespace).toBe('auth');
+    expect(sent.action).toBe('getUser');
+    expect(sent.type).toBe('request');
+    expect(sent.source).toBe('test-mini-app');
+    expect(sent.target).toBe(HOST_TARGET);
+    expect(sent.id).toBeTruthy();
+  });
+
+  it('resolves a request when a matching response arrives', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.request<{ id: string }>(NAMESPACES.AUTH, ACTIONS.AUTH.GET_USER);
+    const sent = transport.lastSent!;
+
+    transport.simulateIncoming(
+      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { id: 'user-1' }, { id: sent.id, traceId: sent.traceId })
+    );
+
+    await expect(promise).resolves.toEqual({ id: 'user-1' });
+  });
+
+  it('ignores responses addressed to a different mini app', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 20 });
+    client.start();
+
+    const promise = client.request(NAMESPACES.AUTH, ACTIONS.AUTH.GET_USER);
+    const sent = transport.lastSent!;
+
+    transport.simulateIncoming(
+      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'someone-elses-mini-app', { id: 'nope' }, { id: sent.id, traceId: sent.traceId })
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(TimeoutError);
+  });
+
+  it('rejects with a ProtocolError carrying the host error when the response contains one', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.request(NAMESPACES.PERMISSIONS, ACTIONS.PERMISSIONS.HAS);
+    const sent = transport.lastSent!;
+
+    transport.simulateIncoming(
+      createMessage(
+        'response',
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        'test-mini-app',
+        undefined,
+        { id: sent.id, traceId: sent.traceId, error: { code: 'PERMISSION_DENIED', message: 'nope', retryable: false } }
+      )
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(ProtocolError);
+    await expect(promise).rejects.toMatchObject({ code: 'PERMISSION_DENIED', retryable: false });
+  });
+
+  it('rejects with TimeoutError when no response arrives in time', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 10, retryAttempts: 0 });
+    client.start();
+
+    await expect(client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION)).rejects.toBeInstanceOf(TimeoutError);
+  });
+
+  it('retries a retryable failure up to retryAttempts times', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 10, retryAttempts: 2, retryDelayMs: 1 });
+    client.start();
+
+    const promise = client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.NETWORK);
+
+    // let all three attempts (1 initial + 2 retries) time out
+    await expect(promise).rejects.toBeInstanceOf(TimeoutError);
+    expect(transport.sent).toHaveLength(3);
+  });
+
+  it('resolves the handshake when the host responds', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.handshake();
+    const sent = transport.lastSent!;
+    expect(sent.type).toBe('handshake');
+
+    transport.simulateIncoming(
+      createMessage('handshake', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { status: 'ok' }, { id: sent.id, traceId: sent.traceId })
+    );
+
+    await expect(promise).resolves.toBeUndefined();
+  });
+
+  it('sends its protocol version and capability list in the handshake payload', () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    void client.handshake();
+
+    const sent = transport.lastSent!;
+    const payload = sent.payload as { protocolVersion: string; capabilities: string[] };
+    expect(payload.protocolVersion).toBe('3.0.0');
+    expect(payload.capabilities).toContain('auth');
+    expect(payload.capabilities).toContain('http');
+  });
+
+  it('narrows capabilities to what the host confirms it supports', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.handshake();
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        'handshake',
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        'test-mini-app',
+        { status: 'ok', protocolVersion: '3.0.0', capabilities: ['auth', 'http'] },
+        { id: sent.id, traceId: sent.traceId }
+      )
+    );
+    await promise;
+
+    expect(client.getCapabilities()).toEqual(['auth', 'http']);
+  });
+
+  it('assumes full capability support when the host does not report any', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.handshake();
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage('handshake', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { status: 'ok' }, { id: sent.id, traceId: sent.traceId })
+    );
+    await promise;
+
+    expect(client.getCapabilities()).toContain('auth');
+    expect(client.getCapabilities()).toContain('device');
+  });
+
+  it('rejects the handshake when the host reports an incompatible major protocol version', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.handshake();
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        'handshake',
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        'test-mini-app',
+        { status: 'ok', protocolVersion: '4.0.0' },
+        { id: sent.id, traceId: sent.traceId }
+      )
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(HandshakeError);
+  });
+
+  it('accepts a host on a compatible minor/patch protocol version', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.handshake();
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        'handshake',
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        'test-mini-app',
+        { status: 'ok', protocolVersion: '3.9.2' },
+        { id: sent.id, traceId: sent.traceId }
+      )
+    );
+
+    await expect(promise).resolves.toBeUndefined();
+  });
+
+  it('rejects the handshake when the host explicitly refuses the connection', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.handshake();
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        'handshake',
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        'test-mini-app',
+        { status: 'rejected', reason: 'module not registered' },
+        { id: sent.id, traceId: sent.traceId }
+      )
+    );
+
+    await expect(promise).rejects.toThrow('module not registered');
+  });
+
+  it('drops incoming messages with an incompatible protocol major version', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 20 });
+    client.start();
+
+    const promise = client.request(NAMESPACES.AUTH, ACTIONS.AUTH.GET_USER);
+    const sent = transport.lastSent!;
+
+    transport.simulateIncoming(
+      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { id: 'x' }, { id: sent.id, traceId: sent.traceId, version: '99.0.0' })
+    );
+
+    // the incompatible-version response is dropped, so the request still times out
+    await expect(promise).rejects.toBeInstanceOf(TimeoutError);
+  });
+
+  it('rejects the handshake with HandshakeError on timeout', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 10 });
+    client.start();
+
+    await expect(client.handshake()).rejects.toBeInstanceOf(HandshakeError);
+  });
+
+  it('dispatches events to subscribed handlers only', () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const handler = vi.fn();
+    const unsubscribe = client.onEvent('notification.received', handler);
+
+    transport.simulateIncoming(
+      createMessage('event', 'notification', 'received', HOST_TARGET, 'test-mini-app', { title: 'Hi' })
+    );
+    expect(handler).toHaveBeenCalledWith({ title: 'Hi' });
+
+    unsubscribe();
+    transport.simulateIncoming(
+      createMessage('event', 'notification', 'received', HOST_TARGET, 'test-mini-app', { title: 'Again' })
+    );
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects all pending requests when stopped', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 5000 });
+    client.start();
+
+    const promise = client.request(NAMESPACES.CONFIG, ACTIONS.CONFIG.GET_ALL);
+    client.stop();
+
+    await expect(promise).rejects.toBeInstanceOf(ProtocolError);
+  });
+});
