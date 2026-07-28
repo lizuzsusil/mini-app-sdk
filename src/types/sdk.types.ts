@@ -4,9 +4,11 @@ import type { EventHandler } from './common.types';
 import type { NavigationSdkModule } from './navigation.types';
 import type { HostDescriptor, PlatformSdkModule } from './platform.types';
 import type { DeviceSdkModule } from './device.types';
-import type { HttpSdkModule } from './http.types';
+import type { ApiSdkModule } from './api.types';
+import type { StorageSdkModule } from './storage.types';
 import type { RpcClient, RpcMiddleware } from '../rpc';
 import type { RpcMetricsSnapshot } from '../observability';
+import { HttpSdkModule } from './http.types';
 
 /**
  * The full public shape of a `MiniAppSdk` instance — this is the contract
@@ -33,8 +35,10 @@ export interface MiniAppSdkInterface {
   flags: FlagsSdkModule;
   config: ConfigSdkModule;
   navigation: NavigationSdkModule;
+  storage: StorageSdkModule;
   platform: PlatformSdkModule;
   device: DeviceSdkModule;
+  api: ApiSdkModule;
   http: HttpSdkModule;
 
   initialize(): Promise<void>;

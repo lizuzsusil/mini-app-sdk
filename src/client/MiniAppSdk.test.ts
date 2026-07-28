@@ -17,7 +17,7 @@ class ScriptedTransport implements Transport {
   private onMessage: ((message: PlatformMessage) => void) | null = null;
   private readonly platformType: string;
 
-  constructor(platformType: string = 'ANDROID') {
+  constructor(platformType: string = 'flutter') {
     this.platformType = platformType;
   }
 
@@ -54,13 +54,13 @@ class ScriptedTransport implements Transport {
 
 describe('MiniAppSdk', () => {
   it('initializes: starts the transport, handshakes, and resolves the platform type', async () => {
-    const transport = new ScriptedTransport('IOS');
+    const transport = new ScriptedTransport('flutter');
     const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
 
     await sdk.initialize();
 
-    expect(sdk.platform.type).toBe('IOS');
-    expect(sdk.platform.isIOS()).toBe(true);
+    expect(sdk.platform.type).toBe('flutter');
+    expect(sdk.platform.isFlutter()).toBe(true);
     expect(sdk.platform.isMobile()).toBe(true);
     expect(sdk.miniAppId).toBe('my-mini-app');
   });

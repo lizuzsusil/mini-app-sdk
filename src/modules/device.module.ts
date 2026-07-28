@@ -18,10 +18,6 @@ import type {
   DeviceSdkModule,
 } from '../types';
 
-interface StorageRpcResult {
-  value: string | null;
-}
-
 export function createDeviceModule(rpc: RpcClient): DeviceSdkModule {
   return {
     location: (options?: DeviceLocationOptions) => rpc.request<DeviceLocationResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION, options),
@@ -32,14 +28,6 @@ export function createDeviceModule(rpc: RpcClient): DeviceSdkModule {
     notifications: (options?: DeviceNotificationsOptions) =>
       rpc.request<DeviceNotificationResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.NOTIFICATIONS, options),
     network: () => rpc.request<DeviceNetworkResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.NETWORK),
-    storage: {
-      get: (key: string) =>
-        rpc
-          .request<StorageRpcResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.STORAGE, { action: 'get', key })
-          .then((result) => result?.value ?? null),
-      set: (key: string, value: string) => rpc.request<void>(NAMESPACES.DEVICE, ACTIONS.DEVICE.STORAGE, { action: 'set', key, value }),
-      remove: (key: string) => rpc.request<void>(NAMESPACES.DEVICE, ACTIONS.DEVICE.STORAGE, { action: 'remove', key }),
-    },
     info: () => rpc.request<DeviceInfoResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.INFO),
   };
 }

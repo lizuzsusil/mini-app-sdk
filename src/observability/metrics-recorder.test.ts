@@ -39,7 +39,7 @@ describe('MetricsRecorder', () => {
     recorder.recordSuccess('http', 'get', 100);
     recorder.recordSuccess('http', 'get', 200);
 
-    expect(recorder.snapshot().byAction['http.get']!.averageDurationMs).toBe(150);
+    expect(recorder.snapshot().byAction['api.request']!.averageDurationMs).toBe(150);
   });
 
   it('aggregates totals across multiple actions', () => {

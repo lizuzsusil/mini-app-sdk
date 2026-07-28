@@ -93,12 +93,6 @@ export interface DeviceInfoResult {
   screenHeight?: number;
 }
 
-export interface DeviceStorageModule {
-  get(key: string): Promise<string | null>;
-  set(key: string, value: string): Promise<void>;
-  remove(key: string): Promise<void>;
-}
-
 export interface DeviceSdkModule {
   location(options?: DeviceLocationOptions): Promise<DeviceLocationResult>;
   camera(options?: DeviceCameraOptions): Promise<DeviceCameraResult>;
@@ -107,6 +101,5 @@ export interface DeviceSdkModule {
   biometric(options?: DeviceBiometricOptions): Promise<DeviceBiometricResult>;
   notifications(options?: DeviceNotificationsOptions): Promise<DeviceNotificationResult>;
   network(): Promise<DeviceNetworkResult>;
-  storage: DeviceStorageModule;
   info(): Promise<DeviceInfoResult>;
 }

@@ -4,14 +4,16 @@ import { noopLogger } from '../logging';
 import { ACTIONS, HOST_DESCRIPTOR_GLOBAL_KEY, NAMESPACES, PROTOCOL_VERSION } from '../constants';
 import {
   ModuleRegistry,
+  createApiModule,
   createAuthModule,
   createConfigModule,
   createDeviceModule,
   createFlagsModule,
-  createHttpModule,
   createNavigationModule,
+  createHttpModule,
   createPermissionsModule,
   createPlatformModule,
+  createStorageModule,
 } from '../modules';
 import type { ModuleFactory } from '../modules';
 import type { RpcMetricsSnapshot } from '../observability';
@@ -20,19 +22,21 @@ import { RpcClient } from '../rpc';
 import { DefaultTransport } from '../transport';
 import type { Transport } from '../transport';
 import type {
+  ApiSdkModule,
   AuthSdkModule,
   ConfigSdkModule,
   DeviceSdkModule,
   EventHandler,
   FlagsSdkModule,
   HostDescriptor,
-  HttpSdkModule,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
   NavigationSdkModule,
   PermissionsSdkModule,
   PlatformSdkModule,
   PlatformTypeLiteral,
+  HttpSdkModule,
+  StorageSdkModule,
 } from '../types';
 
 /**
@@ -79,6 +83,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly flags: FlagsSdkModule;
   readonly config: ConfigSdkModule;
   readonly navigation: NavigationSdkModule;
+  readonly api: ApiSdkModule;
+  readonly storage: StorageSdkModule;
   readonly platform: PlatformSdkModule;
   readonly device: DeviceSdkModule;
   readonly http: HttpSdkModule;
@@ -122,7 +128,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.register(NAMESPACES.FLAGS, createFlagsModule);
     this.registry.register(NAMESPACES.CONFIG, createConfigModule);
     this.registry.register(NAMESPACES.NAVIGATION, createNavigationModule);
+    this.registry.register(NAMESPACES.STORAGE, createStorageModule);
     this.registry.register(NAMESPACES.DEVICE, createDeviceModule);
+    this.registry.register(NAMESPACES.API, createApiModule);
     this.registry.register(NAMESPACES.HTTP, createHttpModule);
     this.registry.build(this.rpc);
 
@@ -131,10 +139,12 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.flags = this.registry.get<FlagsSdkModule>(NAMESPACES.FLAGS)!;
     this.config = this.registry.get<ConfigSdkModule>(NAMESPACES.CONFIG)!;
     this.navigation = this.registry.get<NavigationSdkModule>(NAMESPACES.NAVIGATION)!;
+    this.storage = this.registry.get<StorageSdkModule>(NAMESPACES.STORAGE)!;
     this.device = this.registry.get<DeviceSdkModule>(NAMESPACES.DEVICE)!;
+    this.api = this.registry.get<ApiSdkModule>(NAMESPACES.API)!;
     this.http = this.registry.get<HttpSdkModule>(NAMESPACES.HTTP)!;
 
-    const platformHandle = createPlatformModule('WEB');
+    const platformHandle = createPlatformModule('web');
     this.platform = platformHandle.module;
     this.setPlatformType = platformHandle.setType;
   }

@@ -3,6 +3,7 @@ export type { PlatformUser, AuthSdkModule, PermissionsSdkModule } from './auth.t
 export type { FlagsSdkModule, ConfigSdkModule } from './config.types';
 export type { NavigationTarget, NavigationState, NavigationSdkModule } from './navigation.types';
 export type { HostDescriptor, PlatformSdkModule } from './platform.types';
+export type { StorageSdkModule } from './storage.types';
 export type {
   DeviceLocationOptions,
   DeviceLocationResult,
@@ -18,8 +19,8 @@ export type {
   DeviceNotificationResult,
   DeviceNetworkResult,
   DeviceInfoResult,
-  DeviceStorageModule,
   DeviceSdkModule,
 } from './device.types';
 export type { HttpGetParams, HttpPostParams, HttpPutParams, HttpPatchParams, HttpDeleteParams, HttpResult, HttpSdkModule } from './http.types';
+export type { ApiRequestParams, ApiResult, ApiSdkModule } from './api.types';
 export type { MiniAppSdkInterface, MiniAppSdkOptions, CreateInstanceOptions } from './sdk.types';

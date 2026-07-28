@@ -11,6 +11,8 @@ export const NAMESPACES = {
   NAVIGATION: 'navigation',
   PLATFORM: 'platform',
   DEVICE: 'device',
+  API: 'api',
+  STORAGE: 'storage',
   HTTP: 'http',
   EVENT: 'event',
   HANDSHAKE: 'handshake',
@@ -33,6 +35,8 @@ export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.NAVIGATION,
   NAMESPACES.PLATFORM,
   NAMESPACES.DEVICE,
+  NAMESPACES.STORAGE,
+  NAMESPACES.API,
   NAMESPACES.HTTP,
 ];
 
@@ -73,7 +77,6 @@ export const ACTIONS = {
     BIOMETRIC: 'biometric',
     NOTIFICATIONS: 'notifications',
     NETWORK: 'network',
-    STORAGE: 'storage',
     INFO: 'info',
   },
   HTTP: {
@@ -82,6 +85,14 @@ export const ACTIONS = {
     PUT: 'put',
     PATCH: 'patch',
     DELETE: 'delete',
+  },
+  STORAGE: {
+    GET: 'get',
+    SET: 'set',
+    REMOVE: 'remove',
+  },
+  API: {
+    REQUEST: 'request',
   },
   EVENT: {
     SUBSCRIBE: 'subscribe',

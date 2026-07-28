@@ -20,17 +20,16 @@ export interface PlatformModuleHandle {
  * entirely inside this closure; nothing outside this file can change it
  * except through the `setType` handle returned alongside the module.
  */
-export function createPlatformModule(initialType: PlatformTypeLiteral = 'WEB'): PlatformModuleHandle {
+export function createPlatformModule(initialType: PlatformTypeLiteral = 'web'): PlatformModuleHandle {
   let type: PlatformTypeLiteral = initialType;
 
   const module: PlatformSdkModule = {
     get type() {
       return type;
     },
-    isWeb: () => type === 'WEB',
-    isAndroid: () => type === 'ANDROID',
-    isIOS: () => type === 'IOS',
-    isMobile: () => type !== 'WEB',
+    isWeb: () => type === 'web',
+    isFlutter: () => type === 'flutter',
+    isMobile: () => type === 'flutter',
   };
 
   return {
