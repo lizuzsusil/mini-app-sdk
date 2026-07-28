@@ -22,5 +22,5 @@ export type {
   DeviceSdkModule,
 } from './device.types';
 export type { HttpGetParams, HttpPostParams, HttpPutParams, HttpPatchParams, HttpDeleteParams, HttpResult, HttpSdkModule } from './http.types';
-export type { ApiRequestParams, ApiResult, ApiSdkModule } from './api.types';
+export type { ApiRequestParams, ApiResult, ApiSdkModule, HttpMethod } from './api.types';
 export type { MiniAppSdkInterface, MiniAppSdkOptions, CreateInstanceOptions } from './sdk.types';
