@@ -4,7 +4,7 @@
  * backward-incompatible way. Phase 1 stamps every message with this value
  * but does not yet negotiate it against the host (see Phase 2).
  */
-export const PROTOCOL_VERSION = '3.0.0';
+export const PROTOCOL_VERSION = '1.0.0';
 
 /**
  * Value written to `PlatformMessage.channel`. Used by hosts to distinguish
