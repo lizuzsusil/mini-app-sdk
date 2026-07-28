@@ -14,7 +14,7 @@ import type { RpcMetricsSnapshot } from '../observability';
  * event-subscription, and extensibility methods.
  */
 export interface MiniAppSdkInterface {
-  readonly moduleId: string;
+  readonly miniAppId: string;
   readonly version: string;
   readonly traceId: string;
   /** Static host descriptor injected by the shell before mount, or null if running outside a GSA shell. */
@@ -55,7 +55,7 @@ export interface MiniAppSdkInterface {
 }
 
 export interface CreateInstanceOptions {
-  moduleId: string;
+  miniAppId: string;
   channel?: string;
   sdkOptions?: MiniAppSdkOptions;
 };
@@ -67,7 +67,7 @@ export interface CreateInstanceOptions {
  * think about.
  */
 export interface MiniAppSdkOptions {
-  moduleId: string;
+  miniAppId: string;
   timeout?: number;
   retryAttempts?: number;
   retryDelayMs?: number;

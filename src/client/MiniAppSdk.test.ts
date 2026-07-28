@@ -55,19 +55,19 @@ class ScriptedTransport implements Transport {
 describe('MiniAppSdk', () => {
   it('initializes: starts the transport, handshakes, and resolves the platform type', async () => {
     const transport = new ScriptedTransport('IOS');
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
 
     await sdk.initialize();
 
     expect(sdk.platform.type).toBe('IOS');
     expect(sdk.platform.isIOS()).toBe(true);
     expect(sdk.platform.isMobile()).toBe(true);
-    expect(sdk.moduleId).toBe('my-mini-app');
+    expect(sdk.miniAppId).toBe('my-mini-app');
   });
 
   it('is idempotent: calling initialize() twice does not re-run the handshake', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
 
     await sdk.initialize();
     const handshakeCount = transport.sent.filter((m) => m.type === 'handshake').length;
@@ -81,7 +81,7 @@ describe('MiniAppSdk', () => {
 
   it('is concurrency-safe: parallel initialize() calls share one handshake', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
 
     await Promise.all([sdk.initialize(), sdk.initialize(), sdk.initialize()]);
 
@@ -90,7 +90,7 @@ describe('MiniAppSdk', () => {
 
   it('exposes a working auth module end-to-end', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
     await sdk.initialize();
 
     const userPromise = sdk.auth.getUser();
@@ -105,7 +105,7 @@ describe('MiniAppSdk', () => {
 
   it('throws SdkError if initialize() is called after destroy()', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
     await sdk.initialize();
 
     sdk.destroy();
@@ -115,7 +115,7 @@ describe('MiniAppSdk', () => {
 
   it('destroy() is safe to call multiple times', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
     await sdk.initialize();
 
     expect(() => {
@@ -129,12 +129,12 @@ describe('MiniAppSdk', () => {
     // constructing it should not throw (construction is lazy — only
     // start()/send() touch `window`), proving the SDK still works exactly
     // as before for consumers who don't inject anything.
-    expect(() => new MiniAppSdk({ moduleId: 'my-mini-app' })).not.toThrow();
+    expect(() => new MiniAppSdk({ miniAppId: 'my-mini-app' })).not.toThrow();
   });
 
   it('runs a registered middleware around every module call', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
     await sdk.initialize();
 
     const seen: string[] = [];
@@ -153,7 +153,7 @@ describe('MiniAppSdk', () => {
 
   it('reports accurate metrics after a mix of successful module calls', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
     await sdk.initialize();
 
     const userPromise = sdk.auth.getUser();
@@ -168,7 +168,7 @@ describe('MiniAppSdk', () => {
 
   it('lets a host or vendor register and retrieve a custom module', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
     await sdk.initialize();
 
     sdk.registerModule('payments', (rpc) => ({
@@ -189,7 +189,7 @@ describe('MiniAppSdk', () => {
 
   it('exposes built-in modules through getModule() by their namespace name', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
     await sdk.initialize();
 
     expect(sdk.getModule('auth')).toBe(sdk.auth);
@@ -197,7 +197,7 @@ describe('MiniAppSdk', () => {
 
   it('getModule() returns undefined for a module that was never registered', async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ moduleId: 'my-mini-app' }, { transport });
+    const sdk = new MiniAppSdk({ miniAppId: 'my-mini-app' }, { transport });
     await sdk.initialize();
 
     expect(sdk.getModule('does-not-exist')).toBeUndefined();

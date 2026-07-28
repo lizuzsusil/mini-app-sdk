@@ -79,8 +79,8 @@ export function validatePlatformMessage(data: unknown): MessageValidationResult 
     return { valid: false, reason: 'missing or invalid "target"' };
   }
 
-  if (!isNonEmptyString(data.version)) {
-    return { valid: false, reason: 'missing or invalid "version"' };
+  if (!isNonEmptyString(data.gsaProtocolVersion)) {
+    return { valid: false, reason: 'missing or invalid "gsaProtocolVersion"' };
   }
 
   if (!isNonEmptyString(data.traceId)) {
@@ -116,5 +116,5 @@ export function majorVersionsMatch(a: string, b: string): boolean {
  * for a wire format this SDK build doesn't speak.
  */
 export function hasCompatibleMajorVersion(message: PlatformMessage, expected: string = PROTOCOL_VERSION): boolean {
-  return majorVersionsMatch(message.version, expected);
+  return majorVersionsMatch(message.gsaProtocolVersion, expected);
 }

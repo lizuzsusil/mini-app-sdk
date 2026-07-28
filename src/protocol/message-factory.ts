@@ -5,7 +5,7 @@ import type { MessageType, PlatformError, PlatformMessage } from './message.type
 export interface CreateMessageOptions {
   requestId?: string;
   traceId?: string;
-  version?: string;
+  gsaProtocolVersion?: string;
   error?: PlatformError;
 }
 
@@ -32,7 +32,7 @@ export function createMessage<TPayload = unknown>(
     action,
     source,
     target,
-    version: options?.version ?? PROTOCOL_VERSION,
+    gsaProtocolVersion: options?.gsaProtocolVersion ?? PROTOCOL_VERSION,
     payload,
     error: options?.error,
     traceId: options?.traceId ?? generateId(),

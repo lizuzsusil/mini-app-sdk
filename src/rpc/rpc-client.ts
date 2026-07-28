@@ -14,7 +14,7 @@ import type { RpcMiddleware } from './middleware';
 export type EventHandler<TPayload = unknown> = (payload: TPayload) => void;
 
 export interface RpcClientOptions {
-  moduleId: string;
+  miniAppId: string;
   timeout?: number;
   retryAttempts?: number;
   retryDelayMs?: number;
@@ -55,7 +55,7 @@ const RPC_CLIENT_SDK_VERSION = '3.0.0';
  * on `Transport` directly.
  */
 export class RpcClient {
-  private readonly moduleId: string;
+  private readonly miniAppId: string;
   private readonly timeout: number;
   private readonly retryAttempts: number;
   private readonly retryDelayMs: number;
@@ -82,7 +82,7 @@ export class RpcClient {
 
   constructor(transport: Transport, options: RpcClientOptions) {
     this.transport = transport;
-    this.moduleId = options.moduleId;
+    this.miniAppId = options.miniAppId;
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
     this.retryAttempts = options.retryAttempts ?? DEFAULT_RETRY_ATTEMPTS;
     this.retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
@@ -135,13 +135,13 @@ export class RpcClient {
    */
   async handshake(): Promise<void> {
     const payload: HandshakePayload = {
-      moduleId: this.moduleId,
+      miniAppId: this.miniAppId,
       sdkVersion: RPC_CLIENT_SDK_VERSION,
       protocolVersion: PROTOCOL_VERSION,
       capabilities: SDK_CAPABILITIES,
     };
 
-    const message = createMessage('handshake', NAMESPACES.HANDSHAKE, ACTIONS.HANDSHAKE.CONNECT, this.moduleId, HOST_TARGET, payload, {
+    const message = createMessage('handshake', NAMESPACES.HANDSHAKE, ACTIONS.HANDSHAKE.CONNECT, this.miniAppId, HOST_TARGET, payload, {
       traceId: this.traceId,
     });
 
@@ -301,7 +301,7 @@ export class RpcClient {
   }
 
   private sendRequest<T>(namespace: string, action: string, payload?: unknown): Promise<T> {
-    const message = createMessage('request', namespace, action, this.moduleId, HOST_TARGET, payload, {
+    const message = createMessage('request', namespace, action, this.miniAppId, HOST_TARGET, payload, {
       traceId: this.traceId,
     });
 
@@ -338,11 +338,11 @@ export class RpcClient {
   }
 
   private handleIncomingMessage(message: PlatformMessage): void {
-    if (message.target !== this.moduleId && message.target !== '*') return;
+    if (message.target !== this.miniAppId && message.target !== '*') return;
 
     if (!hasCompatibleMajorVersion(message)) {
       this.logger.warn('Dropped message with an incompatible protocol major version', {
-        received: message.version,
+        received: message.gsaProtocolVersion,
         expected: PROTOCOL_VERSION,
         namespace: message.namespace,
         action: message.action,

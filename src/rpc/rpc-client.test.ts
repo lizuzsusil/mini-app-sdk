@@ -7,7 +7,7 @@ import { createMessage } from '../protocol';
 
 function makeClient(transport: FakeTransport, overrides: Partial<{ timeout: number; retryAttempts: number; retryDelayMs: number }> = {}) {
   return new RpcClient(transport, {
-    moduleId: 'test-mini-app',
+    miniAppId: 'test-mini-app',
     timeout: overrides.timeout ?? 1000,
     retryAttempts: overrides.retryAttempts ?? 2,
     retryDelayMs: overrides.retryDelayMs ?? 1,
@@ -261,7 +261,7 @@ describe('RpcClient', () => {
     const sent = transport.lastSent!;
 
     transport.simulateIncoming(
-      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { id: 'x' }, { requestId: sent.requestId, traceId: sent.traceId, version: '99.0.0' })
+      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', { id: 'x' },         { requestId: sent.requestId, traceId: sent.traceId, gsaProtocolVersion: '99.0.0' })
     );
 
     // the incompatible-version response is dropped, so the request still times out

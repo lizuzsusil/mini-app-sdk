@@ -2,10 +2,10 @@ import { MiniAppSdk } from './client';
 import type { MiniAppSdkDependencies } from './client';
 import type { CreateInstanceOptions, MiniAppSdkOptions } from './types';
 
-/** Map of moduleId to MiniAppSdk instances */
+/** Map of miniAppId to MiniAppSdk instances */
 const instances = new Map<string, MiniAppSdk>();
 
-/** Tracks the moduleId of the most recently created SDK instance */
+/** Tracks the miniAppId of the most recently created SDK instance */
 let activeModuleId: string | null = null;
 
 /**
@@ -15,28 +15,28 @@ let activeModuleId: string | null = null;
 const registry = {
   /**
    * Creates and initializes a new MiniAppSdk for the given module.
-   * If an instance already exists for the same moduleId it is destroyed first.
+   * If an instance already exists for the same miniAppId it is destroyed first.
    * On success the new instance is stored and set as the active instance.
    *
-   * @param moduleId  - Unique identifier for the mini-app module
+   * @param miniAppId  - Unique identifier for the mini-app module
    * @param _channel  - (reserved) Communication channel hint
    * @param sdkOptions - Optional configuration overrides (timeout, retry, targetOrigin)
    * @returns The initialized MiniAppSdk instance
    */
   async createInstance({
-    moduleId,
+    miniAppId,
     channel: _channel,
     sdkOptions,
   }: CreateInstanceOptions) {
-    const existing = instances.get(moduleId);
+    const existing = instances.get(miniAppId);
 
     if (existing) {
       existing.destroy();
-      instances.delete(moduleId);
+      instances.delete(miniAppId);
     }
 
     const opts: MiniAppSdkOptions = {
-      moduleId,
+      miniAppId,
       timeout: sdkOptions?.timeout,
       retryAttempts: sdkOptions?.retryAttempts,
       retryDelayMs: sdkOptions?.retryDelayMs,
@@ -51,8 +51,8 @@ const registry = {
     try {
       await sdk.initialize();
 
-      instances.set(moduleId, sdk);
-      activeModuleId = moduleId;
+      instances.set(miniAppId, sdk);
+      activeModuleId = miniAppId;
 
       return sdk;
     } catch (error) {
@@ -70,18 +70,18 @@ const registry = {
   },
 
   /**
-   * Destroys the MiniAppSdk instance for the given moduleId and removes it
+   * Destroys the MiniAppSdk instance for the given miniAppId and removes it
    * from the registry. If the destroyed instance was the active one, the
    * most recently created remaining instance becomes active.
    *
-   * @param moduleId - The module whose instance should be destroyed
+   * @param miniAppId - The module whose instance should be destroyed
    */
-  destroyInstance(moduleId: string) {
-    const sdk = instances.get(moduleId);
+  destroyInstance(miniAppId: string) {
+    const sdk = instances.get(miniAppId);
     if (sdk) {
       sdk.destroy();
-      instances.delete(moduleId);
-      if (activeModuleId === moduleId) {
+      instances.delete(miniAppId);
+      if (activeModuleId === miniAppId) {
         const remainingKeys = Array.from(instances.keys());
         activeModuleId = remainingKeys[remainingKeys.length - 1] ?? null;
       }

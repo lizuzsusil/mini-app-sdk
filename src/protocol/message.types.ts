@@ -29,7 +29,7 @@ export interface PlatformMessage<TPayload = unknown> {
   action: string;
   source: string;
   target: string;
-  version: string;
+  gsaProtocolVersion: string;
   payload?: TPayload;
   error?: PlatformError;
   traceId: string;
@@ -43,7 +43,7 @@ export interface PlatformMessage<TPayload = unknown> {
  * should expect requests for.
  */
 export interface HandshakePayload {
-  moduleId: string;
+  miniAppId: string;
   sdkVersion: string;
   protocolVersion: string;
   capabilities: string[];

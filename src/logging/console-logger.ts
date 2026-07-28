@@ -16,7 +16,7 @@ const LEVEL_ORDER = { debug: 0, info: 1, warn: 2, error: 3 } as const;
  * what the SDK is doing:
  *
  * ```ts
- * const sdk = new MiniAppSdk({ moduleId: 'x' }, { logger: new ConsoleLogger({ minLevel: 'debug' }) });
+ * const sdk = new MiniAppSdk({ miniAppId: 'x' }, { logger: new ConsoleLogger({ minLevel: 'debug' }) });
  * ```
  */
 export class ConsoleLogger implements Logger {

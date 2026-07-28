@@ -29,7 +29,7 @@ export const HOST_TARGET = 'shell';
 
 /**
  * Wildcard target: a host broadcasting to every connected mini app uses this
- * value instead of a specific `moduleId`.
+ * value instead of a specific `miniAppId`.
  */
 export const BROADCAST_TARGET = '*';
 

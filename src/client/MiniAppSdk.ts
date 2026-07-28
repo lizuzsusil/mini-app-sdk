@@ -38,7 +38,7 @@ import type {
 /**
  * Extra, internal-only construction knobs. Deliberately **not** part of
  * `MiniAppSdkOptions` (the public, vendor-facing options type) — a vendor
- * mini-app developer configures `moduleId`/`timeout`/`retryAttempts` the
+ * mini-app developer configures `miniAppId`/`timeout`/`retryAttempts` the
  * same way they always have. `transport`, `logger`, and `allowedOrigin` are
  * for host SDKs and internal callers: `transport` to inject a non-default
  * delivery mechanism, `logger` to wire up real logging, and
@@ -68,7 +68,7 @@ export interface MiniAppSdkDependencies {
  * belongs in a module file instead.
  */
 export class MiniAppSdk implements MiniAppSdkInterface {
-  readonly moduleId: string;
+  readonly miniAppId: string;
   readonly version = PROTOCOL_VERSION;
   readonly traceId: string;
 
@@ -93,7 +93,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private initializePromise: Promise<void> | null = null;
 
   constructor(options: MiniAppSdkOptions, dependencies: MiniAppSdkDependencies = {}) {
-    this.moduleId = options.moduleId;
+    this.miniAppId = options.miniAppId;
     this.logger = dependencies.logger ?? noopLogger;
 
     this.hostDescriptor = typeof window !== 'undefined'
@@ -103,7 +103,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     const transport =
       dependencies.transport ?? new DefaultTransport({ logger: this.logger, allowedOrigin: dependencies.allowedOrigin });
     this.rpc = new RpcClient(transport, {
-      moduleId: options.moduleId,
+      miniAppId: options.miniAppId,
       timeout: options.timeout,
       retryAttempts: options.retryAttempts,
       retryDelayMs: options.retryDelayMs,
@@ -157,7 +157,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     if (this.destroyed) {
       throw new SdkError({
         code: 'SDK_ALREADY_DESTROYED',
-        message: `Cannot initialize MiniAppSdk("${this.moduleId}") — this instance has already been destroyed.`,
+        message: `Cannot initialize MiniAppSdk("${this.miniAppId}") — this instance has already been destroyed.`,
       });
     }
     if (this.initialized) return;
@@ -177,7 +177,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     const platformType = await this.rpc.request<PlatformTypeLiteral>(NAMESPACES.PLATFORM, ACTIONS.PLATFORM.GET_TYPE);
     this.setPlatformType(platformType);
     this.initialized = true;
-    this.logger.info(`MiniAppSdk("${this.moduleId}") initialized`, { platformType });
+    this.logger.info(`MiniAppSdk("${this.miniAppId}") initialized`, { platformType });
   }
 
   /**
@@ -190,7 +190,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.rpc.stop();
     this.initialized = false;
     this.destroyed = true;
-    this.logger.info(`MiniAppSdk("${this.moduleId}") destroyed`);
+    this.logger.info(`MiniAppSdk("${this.miniAppId}") destroyed`);
   }
 
   /**
