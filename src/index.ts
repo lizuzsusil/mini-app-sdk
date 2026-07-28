@@ -19,8 +19,6 @@ export type {
   NavigationSdkModule,
   NavigationTarget,
   NavigationState,
-  TelemetrySdkModule,
-  TelemetryLogLevel,
   PlatformSdkModule,
   PlatformTypeLiteral,
   DeviceSdkModule,

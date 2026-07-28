@@ -2,7 +2,7 @@ import type { AuthSdkModule, PermissionsSdkModule } from './auth.types';
 import type { ConfigSdkModule, FlagsSdkModule } from './config.types';
 import type { EventHandler } from './common.types';
 import type { NavigationSdkModule } from './navigation.types';
-import type { TelemetrySdkModule, PlatformSdkModule } from './telemetry.types';
+import type { PlatformSdkModule } from './platform.types';
 import type { DeviceSdkModule } from './device.types';
 import type { HttpSdkModule } from './http.types';
 import type { RpcClient, RpcMiddleware } from '../rpc';
@@ -10,7 +10,7 @@ import type { RpcMetricsSnapshot } from '../observability';
 
 /**
  * The full public shape of a `MiniAppSdk` instance — this is the contract
- * vendor mini apps code against: nine domain modules plus lifecycle,
+ * vendor mini apps code against: eight domain modules plus lifecycle,
  * event-subscription, and extensibility methods.
  */
 export interface MiniAppSdkInterface {
@@ -31,7 +31,6 @@ export interface MiniAppSdkInterface {
   flags: FlagsSdkModule;
   config: ConfigSdkModule;
   navigation: NavigationSdkModule;
-  telemetry: TelemetrySdkModule;
   platform: PlatformSdkModule;
   device: DeviceSdkModule;
   http: HttpSdkModule;

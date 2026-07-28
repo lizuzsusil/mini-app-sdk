@@ -12,7 +12,6 @@ import {
   createNavigationModule,
   createPermissionsModule,
   createPlatformModule,
-  createTelemetryModule,
 } from '../modules';
 import type { ModuleFactory } from '../modules';
 import type { RpcMetricsSnapshot } from '../observability';
@@ -33,7 +32,6 @@ import type {
   PermissionsSdkModule,
   PlatformSdkModule,
   PlatformTypeLiteral,
-  TelemetrySdkModule,
 } from '../types';
 
 /**
@@ -78,7 +76,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly flags: FlagsSdkModule;
   readonly config: ConfigSdkModule;
   readonly navigation: NavigationSdkModule;
-  readonly telemetry: TelemetrySdkModule;
   readonly platform: PlatformSdkModule;
   readonly device: DeviceSdkModule;
   readonly http: HttpSdkModule;
@@ -108,7 +105,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     });
     this.traceId = this.rpc.getTraceId();
 
-    // The nine built-in modules are registered by name instead of being
+    // The eight built-in modules are registered by name instead of being
     // new'd directly, so `registerModule`/`getModule` work uniformly for
     // built-ins and anything a host or vendor adds later. `platform` is
     // registered separately below since its factory needs a slightly
@@ -118,7 +115,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.register(NAMESPACES.FLAGS, createFlagsModule);
     this.registry.register(NAMESPACES.CONFIG, createConfigModule);
     this.registry.register(NAMESPACES.NAVIGATION, createNavigationModule);
-    this.registry.register(NAMESPACES.TELEMETRY, (rpc) => createTelemetryModule(rpc, this.logger));
     this.registry.register(NAMESPACES.DEVICE, createDeviceModule);
     this.registry.register(NAMESPACES.HTTP, createHttpModule);
     this.registry.build(this.rpc);
@@ -128,7 +124,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.flags = this.registry.get<FlagsSdkModule>(NAMESPACES.FLAGS)!;
     this.config = this.registry.get<ConfigSdkModule>(NAMESPACES.CONFIG)!;
     this.navigation = this.registry.get<NavigationSdkModule>(NAMESPACES.NAVIGATION)!;
-    this.telemetry = this.registry.get<TelemetrySdkModule>(NAMESPACES.TELEMETRY)!;
     this.device = this.registry.get<DeviceSdkModule>(NAMESPACES.DEVICE)!;
     this.http = this.registry.get<HttpSdkModule>(NAMESPACES.HTTP)!;
 

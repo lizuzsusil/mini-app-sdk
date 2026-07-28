@@ -1,4 +1,5 @@
-import type { PlatformSdkModule, PlatformTypeLiteral } from '../types';
+import type { PlatformSdkModule } from '../types/platform.types';
+import type { PlatformTypeLiteral } from '../types/common.types';
 
 export interface PlatformModuleHandle {
   /** The public-facing module, satisfying `PlatformSdkModule` exactly — no extra methods. */

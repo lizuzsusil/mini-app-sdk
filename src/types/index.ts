@@ -2,7 +2,7 @@ export type { EventHandler, PlatformTypeLiteral } from './common.types';
 export type { PlatformUser, AuthSdkModule, PermissionsSdkModule } from './auth.types';
 export type { FlagsSdkModule, ConfigSdkModule } from './config.types';
 export type { NavigationTarget, NavigationState, NavigationSdkModule } from './navigation.types';
-export type { TelemetryLogLevel, TelemetrySdkModule, PlatformSdkModule } from './telemetry.types';
+export type { PlatformSdkModule } from './platform.types';
 export type {
   DeviceLocationOptions,
   DeviceLocationResult,

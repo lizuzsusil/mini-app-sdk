@@ -9,7 +9,6 @@ export const NAMESPACES = {
   FLAGS: 'flags',
   CONFIG: 'config',
   NAVIGATION: 'navigation',
-  TELEMETRY: 'telemetry',
   PLATFORM: 'platform',
   DEVICE: 'device',
   HTTP: 'http',
@@ -32,7 +31,6 @@ export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.FLAGS,
   NAMESPACES.CONFIG,
   NAMESPACES.NAVIGATION,
-  NAMESPACES.TELEMETRY,
   NAMESPACES.PLATFORM,
   NAMESPACES.DEVICE,
   NAMESPACES.HTTP,
@@ -63,11 +61,6 @@ export const ACTIONS = {
   NAVIGATION: {
     NAVIGATE: 'navigate',
     GET_CURRENT: 'getCurrent',
-  },
-  TELEMETRY: {
-    LOG: 'log',
-    TRACK: 'track',
-    ERROR: 'error',
   },
   PLATFORM: {
     GET_TYPE: 'getType',
