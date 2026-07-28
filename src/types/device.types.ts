@@ -1,105 +1,102 @@
-import type { PlatformTypeLiteral } from './common.types';
+import {PlatformTypeLiteral} from "./common.types";
 
-/**
- * Every device option interface below keeps an index signature
- * (`[key: string]: unknown`) alongside its named, typed fields. The named
- * fields give autocomplete and type-checking for the options a mini app
- * developer is actually likely to set; the index signature is a deliberate
- * escape hatch so a host can add a new, not-yet-documented option without
- * every caller's object literal failing to type-check.
- */
+export type DevicePermissionStatus =
+    | "granted"
+    | "denied"
+    | "permanentlyDenied"
+    | "restricted";
 
-export interface DeviceLocationOptions {
-  highAccuracy?: boolean;
-  timeoutMs?: number;
-  maximumAgeMs?: number;
-  [key: string]: unknown;
+export interface DevicePermissionBaseResponse<T> {
+    status: DevicePermissionStatus;
+    data?: T;
+    error?: string;
 }
 
 export interface DeviceLocationResult {
-  latitude: number;
-  longitude: number;
-  accuracy?: number;
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    timestamp?: Date | string;
 }
 
-export interface DeviceCameraOptions {
-  quality?: number;
-  allowEditing?: boolean;
-  includeBase64?: boolean;
-  [key: string]: unknown;
+export interface DeviceExtraOptions {
+    reason?: string;
+}
+
+export interface FileModule {
+    rawFile?: File;
+    url: string;
+    fileName?: string;
+    mimeType?: string;
+    extension?: string;
+    byteSize?: number;
+    previewUrl?: string;
+}
+
+export interface DeviceFileOptions extends DeviceExtraOptions {
+    multiple?: boolean;
+    accept?: string[];
 }
 
 export interface DeviceCameraResult {
-  uri: string;
-  base64?: string;
-  width?: number;
-  height?: number;
-}
-
-export interface DeviceGalleryOptions {
-  multiple?: boolean;
-  maxItems?: number;
-  mediaType?: 'image' | 'video' | 'all';
-  [key: string]: unknown;
+    url: string;
+    fileName?: string;
+    mimeType?: string;
+    byteSize?: number;
+    rawFile?: File;
 }
 
 export interface DeviceGalleryResult {
-  uris: string[];
+    images: FileModule[];
 }
 
-export interface DeviceFilesOptions {
-  multiple?: boolean;
-  accept?: string[];
-  [key: string]: unknown;
-}
-
-export interface DeviceFilesResult {
-  uris: string[];
-  names: string[];
-}
-
-export interface DeviceBiometricOptions {
-  reason?: string;
-  [key: string]: unknown;
-}
-
-export interface DeviceBiometricResult {
-  success: boolean;
-  error?: string;
-}
-
-export interface DeviceNotificationsOptions {
-  requestPermission?: boolean;
-  [key: string]: unknown;
+export interface DeviceFileResult {
+    file: FileModule[];
 }
 
 export interface DeviceNotificationResult {
-  enabled: boolean;
-  token?: string;
+    enabled: boolean;
+    token?: string;
 }
 
 export interface DeviceNetworkResult {
-  online: boolean;
-  type?: 'wifi' | 'cellular' | 'none';
-  effectiveType?: string;
+    online: boolean;
+    type?: 'wifi' | 'cellular' | 'none';
+    effectiveType?: string;
 }
 
 export interface DeviceInfoResult {
-  platform: PlatformTypeLiteral;
-  osVersion: string;
-  appVersion: string;
-  deviceModel?: string;
-  screenWidth?: number;
-  screenHeight?: number;
+    platform: PlatformTypeLiteral;
+    osVersion: string;
+    appVersion: string;
+    deviceModel?: string;
+    screenWidth?: number;
+    screenHeight?: number;
+}
+
+export interface DeviceBiometricOptions {
+    reason?: string;
+    [key: string]: unknown;
+}
+
+export interface DeviceBiometricResult {
+    success: boolean;
+    error?: string;
+}
+
+export interface DeviceNotificationsOptions {
+    requestPermission?: boolean;
+    [key: string]: unknown;
 }
 
 export interface DeviceSdkModule {
-  location(options?: DeviceLocationOptions): Promise<DeviceLocationResult>;
-  camera(options?: DeviceCameraOptions): Promise<DeviceCameraResult>;
-  gallery(options?: DeviceGalleryOptions): Promise<DeviceGalleryResult>;
-  files(options?: DeviceFilesOptions): Promise<DeviceFilesResult>;
-  biometric(options?: DeviceBiometricOptions): Promise<DeviceBiometricResult>;
-  notifications(options?: DeviceNotificationsOptions): Promise<DeviceNotificationResult>;
-  network(): Promise<DeviceNetworkResult>;
-  info(): Promise<DeviceInfoResult>;
+    camera(options?: DeviceExtraOptions): Promise<DevicePermissionBaseResponse<DeviceCameraResult>>;
+    location(options?: DeviceExtraOptions): Promise<DevicePermissionBaseResponse<DeviceLocationResult>>;
+    gallery(options?: DeviceFileOptions): Promise<DevicePermissionBaseResponse<DeviceGalleryResult>>;
+    files(options?: DeviceFileOptions): Promise<DevicePermissionBaseResponse<DeviceFileResult>>;
+    biometric(options?: DeviceBiometricOptions): Promise<DeviceBiometricResult>;
+    notifications(options?: DeviceNotificationsOptions): Promise<DeviceNotificationResult>;
+    network(): Promise<DeviceNetworkResult>;
+    info(): Promise<DeviceInfoResult>;
 }
+ 
