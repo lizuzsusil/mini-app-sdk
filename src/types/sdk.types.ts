@@ -1,14 +1,19 @@
-import type { AuthSdkModule, PermissionsSdkModule } from './auth.types';
-import type { ConfigSdkModule, FlagsSdkModule } from './config.types';
-import type { EventHandler } from './common.types';
-import type { NavigationSdkModule } from './navigation.types';
-import type { HostDescriptor, PlatformSdkModule } from './platform.types';
-import type { DeviceSdkModule } from './device.types';
-import type { ApiSdkModule } from './api.types';
-import type { StorageSdkModule } from './storage.types';
+import type {
+  AuthSdkModule,
+  PermissionsSdkModule,
+  ConfigSdkModule,
+  FlagsSdkModule,
+  EventHandler,
+  NavigationSdkModule,
+  HostDescriptor,
+  PlatformSdkModule,
+  DeviceSdkModule,
+  ApiSdkModule,
+  StorageSdkModule,
+  HttpSdkModule,
+} from '@lizuz/mini-app-types';
 import type { RpcClient, RpcMiddleware } from '../rpc';
 import type { RpcMetricsSnapshot } from '../observability';
-import { HttpSdkModule } from './http.types';
 
 /**
  * The full public shape of a `MiniAppSdk` instance — this is the contract
