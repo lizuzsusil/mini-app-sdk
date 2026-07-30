@@ -74,6 +74,7 @@ export const ACTIONS = {
     CAMERA: 'camera',
     GALLERY: 'gallery',
     FILES: 'files',
+    DOWNLOAD: 'download',
     BIOMETRIC: 'biometric',
     NOTIFICATIONS: 'notifications',
     NETWORK: 'network',

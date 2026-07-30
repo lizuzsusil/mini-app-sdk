@@ -54,6 +54,10 @@ export interface DeviceFileResult {
     file: FileModule[];
 }
 
+export interface DeviceDownloadResult {
+  file: FileModule;
+}
+
 export interface DeviceNotificationResult {
     enabled: boolean;
     token?: string;
@@ -89,11 +93,12 @@ export interface DeviceNotificationsOptions {
     [key: string]: unknown;
 }
 
-export interface DeviceSdkModule {
+export interface DeviceSdkModule  {
     camera(options?: DeviceExtraOptions): Promise<DevicePermissionBaseResponse<DeviceCameraResult>>;
     location(options?: DeviceExtraOptions): Promise<DevicePermissionBaseResponse<DeviceLocationResult>>;
     gallery(options?: DeviceFileOptions): Promise<DevicePermissionBaseResponse<DeviceGalleryResult>>;
     files(options?: DeviceFileOptions): Promise<DevicePermissionBaseResponse<DeviceFileResult>>;
+    download(options?: DeviceExtraOptions): Promise<DevicePermissionBaseResponse<DeviceDownloadResult>>;
     biometric(options?: DeviceBiometricOptions): Promise<DeviceBiometricResult>;
     notifications(options?: DeviceNotificationsOptions): Promise<DeviceNotificationResult>;
     network(): Promise<DeviceNetworkResult>;

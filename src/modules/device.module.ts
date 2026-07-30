@@ -1,46 +1,83 @@
-import {ACTIONS, NAMESPACES} from '../constants';
-import type {RpcClient} from '../rpc';
+import { ACTIONS, NAMESPACES } from "../constants";
+import type { RpcClient } from "../rpc";
 import type {
-    DeviceBiometricOptions,
-    DeviceBiometricResult,
-    DeviceCameraResult,
-    DeviceExtraOptions,
-    DeviceFileOptions,
-    DeviceFileResult,
-    DeviceGalleryResult,
-    DeviceInfoResult,
-    DeviceLocationResult,
-    DeviceNetworkResult,
-    DeviceNotificationResult,
-    DeviceNotificationsOptions,
-    DevicePermissionBaseResponse,
-    DeviceSdkModule
-} from '../types';
+  DeviceBiometricOptions,
+  DeviceBiometricResult,
+  DeviceCameraResult,
+  DeviceExtraOptions,
+  DeviceFileOptions,
+  DeviceFileResult,
+  DeviceGalleryResult,
+  DeviceDownloadResult,
+  DeviceInfoResult,
+  DeviceLocationResult,
+  DeviceNetworkResult,
+  DeviceNotificationResult,
+  DeviceNotificationsOptions,
+  DevicePermissionBaseResponse,
+  DeviceSdkModule,
+  DeviceDownloadOptions
+} from "../types";
+
 
 export function createDeviceModule(rpc: RpcClient): DeviceSdkModule {
-    return {
-        location: (options?: DeviceExtraOptions) =>
-            rpc.request<DevicePermissionBaseResponse<DeviceLocationResult>>(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION, options),
+  return {
+    location: (options?: DeviceExtraOptions) =>
+      rpc.request<DevicePermissionBaseResponse<DeviceLocationResult>>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.LOCATION,
+        options,
+      ),
 
-        camera: (options?: DeviceExtraOptions) =>
-            rpc.request<DevicePermissionBaseResponse<DeviceCameraResult>>(NAMESPACES.DEVICE, ACTIONS.DEVICE.CAMERA, options),
+    camera: (options?: DeviceExtraOptions) =>
+      rpc.request<DevicePermissionBaseResponse<DeviceCameraResult>>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.CAMERA,
+        options,
+      ),
 
-        gallery: (options?: DeviceFileOptions) =>
-            rpc.request<DevicePermissionBaseResponse<DeviceGalleryResult>>(NAMESPACES.DEVICE, ACTIONS.DEVICE.GALLERY, options),
+    gallery: (options?: DeviceFileOptions) =>
+      rpc.request<DevicePermissionBaseResponse<DeviceGalleryResult>>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.GALLERY,
+        options,
+      ),
 
-        files: (options?: DeviceFileOptions) =>
-            rpc.request<DevicePermissionBaseResponse<DeviceFileResult>>(NAMESPACES.DEVICE, ACTIONS.DEVICE.FILES, options),
+    files: (options?: DeviceFileOptions) =>
+      rpc.request<DevicePermissionBaseResponse<DeviceFileResult>>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.FILES,
+        options,
+      ),
 
-        biometric: (options?: DeviceBiometricOptions) =>
-            rpc.request<DeviceBiometricResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.BIOMETRIC, options),
+    download: (options?: DeviceDownloadOptions) =>
+      rpc.request<DevicePermissionBaseResponse<DeviceDownloadResult>>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.DOWNLOAD,
+        options,
+      ),
 
-        notifications: (options?: DeviceNotificationsOptions) =>
-            rpc.request<DeviceNotificationResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.NOTIFICATIONS, options),
+    biometric: (options?: DeviceBiometricOptions) =>
+      rpc.request<DeviceBiometricResult>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.BIOMETRIC,
+        options,
+      ),
 
-        network: () =>
-            rpc.request<DeviceNetworkResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.NETWORK),
+    notifications: (options?: DeviceNotificationsOptions) =>
+      rpc.request<DeviceNotificationResult>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.NOTIFICATIONS,
+        options,
+      ),
 
-        info: () =>
-            rpc.request<DeviceInfoResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.INFO),
-    };
+    network: () =>
+      rpc.request<DeviceNetworkResult>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.NETWORK,
+      ),
+
+    info: () =>
+      rpc.request<DeviceInfoResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.INFO),
+  };
 }
