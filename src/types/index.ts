@@ -38,6 +38,7 @@ export type {
   DeviceFileResult,
   DeviceFileOptions,
   DeviceDownloadResult,
+  DeviceContactResult,
   DeviceExtraOptions,
   DeviceNetworkResult,
   DeviceNotificationResult,

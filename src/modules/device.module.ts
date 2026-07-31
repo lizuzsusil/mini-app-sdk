@@ -9,6 +9,7 @@ import type {
   DeviceFileResult,
   DeviceGalleryResult,
   DeviceDownloadResult,
+  DeviceContactResult,
   DeviceInfoResult,
   DeviceLocationResult,
   DeviceNetworkResult,
@@ -16,9 +17,8 @@ import type {
   DeviceNotificationsOptions,
   DevicePermissionBaseResponse,
   DeviceSdkModule,
-  DeviceDownloadOptions
+  DeviceDownloadOptions,
 } from "../types";
-
 
 export function createDeviceModule(rpc: RpcClient): DeviceSdkModule {
   return {
@@ -54,6 +54,13 @@ export function createDeviceModule(rpc: RpcClient): DeviceSdkModule {
       rpc.request<DevicePermissionBaseResponse<DeviceDownloadResult>>(
         NAMESPACES.DEVICE,
         ACTIONS.DEVICE.DOWNLOAD,
+        options,
+      ),
+
+    contact: (options?: DeviceExtraOptions) =>
+      rpc.request<DevicePermissionBaseResponse<DeviceContactResult>>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.CONTACT,
         options,
       ),
 
