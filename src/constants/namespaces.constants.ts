@@ -72,6 +72,7 @@ export const ACTIONS = {
   DEVICE: {
     LOCATION: 'location',
     CAMERA: 'camera',
+    CONTACT: 'contact',
     GALLERY: 'gallery',
     FILES: 'files',
     DOWNLOAD: 'download',
