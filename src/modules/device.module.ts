@@ -66,7 +66,7 @@ export function createDeviceModule(rpc: RpcClient): DeviceSdkModule {
       ),
 
     biometric: (options?: DeviceBiometricOptions) =>
-      rpc.request<DeviceBiometricResult>(
+      rpc.request<DevicePermissionBaseResponse<DeviceBiometricResult>>(
         NAMESPACES.DEVICE,
         ACTIONS.DEVICE.BIOMETRIC,
         options,
