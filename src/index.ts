@@ -4,6 +4,8 @@ import { SdkError } from './errors';
 
 export { MiniAppSdk } from './client';
 
+export type { AppearanceModuleHandle } from './modules';
+
 export {
   PROTOCOL_VERSION,
   PLATFORM_EVENT_NAME,
@@ -52,6 +54,16 @@ export type {
   MiniAppSdkInterface,
   MiniAppSdkOptions,
   EventHandler,
+} from './types';
+
+export type {
+  Direction,
+  ThemePreference,
+  ThemeMode,
+  LocaleState,
+  ThemeState,
+  AppearanceState,
+  AppearanceSdkModule,
 } from './types';
 
 export { SdkError } from './errors';

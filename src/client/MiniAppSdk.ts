@@ -1,10 +1,12 @@
 import { SdkError } from '../errors';
 import type { Logger } from '../logging';
 import { noopLogger } from '../logging';
+import { delay } from '../utils';
 import { ACTIONS, HOST_DESCRIPTOR_GLOBAL_KEY, NAMESPACES, PROTOCOL_VERSION, SDK_GLOBAL_KEY } from '../constants';
 import {
   ModuleRegistry,
   createApiModule,
+  createAppearanceModule,
   createAuthModule,
   createConfigModule,
   createDeviceModule,
@@ -14,8 +16,10 @@ import {
   createPermissionsModule,
   createPlatformModule,
   createStorageModule,
+  APPEARANCE_EVENTS,
 } from '../modules';
-import type { ModuleFactory } from '../modules';
+import type { ModuleFactory, AppearanceModuleHandle } from '../modules';
+import type { LocaleState, ThemeState } from '@lizuz/mini-app-types';
 import type { RpcMetricsSnapshot } from '../observability';
 import type { RpcMiddleware } from '../rpc';
 import { RpcClient } from '../rpc';
@@ -23,6 +27,7 @@ import { DefaultTransport } from '../transport';
 import type { Transport } from '../transport';
 import type {
   ApiSdkModule,
+  AppearanceSdkModule,
   AuthSdkModule,
   ConfigSdkModule,
   DeviceSdkModule,
@@ -58,6 +63,9 @@ export interface MiniAppSdkDependencies {
   allowedOrigin?: string;
 }
 
+/** Upper bound on appearance hydration during `initialize()`. */
+const APPEARANCE_HYDRATION_BUDGET_MS = 1200;
+
 /**
  * The SDK's composition root. `MiniAppSdk`'s only responsibilities are:
  *  1. composing the `RpcClient`, the `ModuleRegistry`, and all domain
@@ -88,11 +96,14 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly platform: PlatformSdkModule;
   readonly device: DeviceSdkModule;
   readonly http: HttpSdkModule;
+  readonly appearance: AppearanceSdkModule;
 
   private readonly rpc: RpcClient;
   private readonly logger: Logger;
   private readonly registry = new ModuleRegistry();
   private readonly setPlatformType: (type: PlatformTypeLiteral) => void;
+  private readonly appearanceHandle: AppearanceModuleHandle;
+  private readonly appearanceUnsubscribers: Array<() => void> = [];
 
   private readonly registerGlobal: boolean;
   private initialized = false;
@@ -149,6 +160,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.platform = platformHandle.module;
     this.setPlatformType = platformHandle.setType;
 
+    this.appearanceHandle = createAppearanceModule(this.rpc);
+    this.appearance = this.appearanceHandle.module;
+
     this.registerGlobal = options.registerGlobal ?? false;
     if (this.registerGlobal) {
       if (typeof globalThis !== 'undefined') {
@@ -194,8 +208,40 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     await this.rpc.handshake();
     const platformType = await this.rpc.request<PlatformTypeLiteral>(NAMESPACES.PLATFORM, ACTIONS.PLATFORM.GET_TYPE);
     this.setPlatformType(platformType);
+
+    // Appearance is additive: a host that didn't negotiate it keeps the SDK
+    // fully functional (store defaults for locale/theme).
+    if (this.capabilities.includes(NAMESPACES.APPEARANCE)) {
+      await this.hydrateAppearance();
+    } else {
+      this.logger.debug('Host did not negotiate appearance; skipping appearance hydration', {
+        capabilities: this.capabilities,
+      });
+    }
+
     this.initialized = true;
     this.logger.info(`MiniAppSdk("${this.miniAppId}") initialized`, { platformType });
+  }
+
+  private async hydrateAppearance(): Promise<void> {
+    // Subscribe first so no host change is missed while hydration is in flight.
+    this.appearanceUnsubscribers.push(
+      this.on(APPEARANCE_EVENTS.LOCALE_CHANGED, (payload) => {
+        this.appearanceHandle.setLocale(payload as unknown as LocaleState);
+      }),
+      this.on(APPEARANCE_EVENTS.THEME_CHANGED, (payload) => {
+        this.appearanceHandle.setTheme(payload as unknown as ThemeState);
+      }),
+    );
+
+    // Bounded budget: appearance is additive and must never block first paint.
+    // If the host is slow or doesn't answer, initialize() still resolves and
+    // the app falls back to the store defaults.
+    const hydration = Promise.all([
+      this.appearance.getLocale(),
+      this.appearance.getTheme(),
+    ]).catch(() => undefined);
+    await Promise.race([hydration, delay(APPEARANCE_HYDRATION_BUDGET_MS)]);
   }
 
   /**
@@ -206,6 +252,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   destroy(): void {
     if (this.destroyed) return;
     this.rpc.stop();
+    for (const unsub of this.appearanceUnsubscribers) unsub();
+    this.appearanceUnsubscribers.length = 0;
     this.initialized = false;
     this.destroyed = true;
     if (this.registerGlobal && typeof globalThis !== 'undefined') {

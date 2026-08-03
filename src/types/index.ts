@@ -46,6 +46,7 @@ export type {
   DeviceLocationResult,
   DeviceDownloadOptions,
   DeviceBiometricOptions,
+  DeviceContactResult,
   DeviceSdkModule,
 } from '@lizuz/mini-app-types';
 
@@ -66,3 +67,13 @@ export type {
 
 export type { HttpResult, HttpSdkModule } from '@lizuz/mini-app-types';
 export type { MiniAppSdkInterface, MiniAppSdkOptions, CreateInstanceOptions } from './sdk.types';
+
+export type {
+  Direction,
+  ThemePreference,
+  ThemeMode,
+  LocaleState,
+  ThemeState,
+  AppearanceState,
+  AppearanceSdkModule,
+} from '@lizuz/mini-app-types';

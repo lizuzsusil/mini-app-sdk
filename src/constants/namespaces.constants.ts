@@ -14,6 +14,7 @@ export const NAMESPACES = {
   API: 'api',
   STORAGE: 'storage',
   HTTP: 'http',
+  APPEARANCE: 'appearance',
   EVENT: 'event',
   HANDSHAKE: 'handshake',
 } as const;
@@ -38,6 +39,7 @@ export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.STORAGE,
   NAMESPACES.API,
   NAMESPACES.HTTP,
+  NAMESPACES.APPEARANCE,
 ];
 
 /**
@@ -75,6 +77,7 @@ export const ACTIONS = {
     GALLERY: 'gallery',
     FILES: 'files',
     DOWNLOAD: 'download',
+    CONTACT: 'contact',
     BIOMETRIC: 'biometric',
     NOTIFICATIONS: 'notifications',
     NETWORK: 'network',
@@ -94,6 +97,10 @@ export const ACTIONS = {
   },
   API: {
     REQUEST: 'request',
+  },
+  APPEARANCE: {
+    GET_LOCALE: 'getLocale',
+    GET_THEME: 'getTheme',
   },
   EVENT: {
     SUBSCRIBE: 'subscribe',

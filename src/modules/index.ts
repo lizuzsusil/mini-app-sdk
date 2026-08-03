@@ -9,5 +9,7 @@ export type { PlatformModuleHandle } from './platform.module';
 export { createDeviceModule } from './device.module';
 export { createApiModule } from './api.module';
 export { createHttpModule } from './http.module';
+export { createAppearanceModule, APPEARANCE_EVENTS } from './appearance.module';
+export type { AppearanceModuleHandle } from './appearance.module';
 export { ModuleRegistry } from './module-registry';
 export type { ModuleFactory } from './module-registry';

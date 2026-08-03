@@ -4,6 +4,7 @@ import type {
   DeviceBiometricOptions,
   DeviceBiometricResult,
   DeviceCameraResult,
+  DeviceContactResult,
   DeviceExtraOptions,
   DeviceFileOptions,
   DeviceFileResult,
@@ -54,6 +55,13 @@ export function createDeviceModule(rpc: RpcClient): DeviceSdkModule {
       rpc.request<DevicePermissionBaseResponse<DeviceDownloadResult>>(
         NAMESPACES.DEVICE,
         ACTIONS.DEVICE.DOWNLOAD,
+        options,
+      ),
+
+    contact: (options?: DeviceExtraOptions) =>
+      rpc.request<DevicePermissionBaseResponse<DeviceContactResult>>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.CONTACT,
         options,
       ),
 
