@@ -18,8 +18,8 @@ import {
   createStorageModule,
   APPEARANCE_EVENTS,
 } from '../modules';
-import type { ModuleFactory, AppearanceModuleHandle } from '../modules';
-import type { LocaleState, ThemeState } from '@lizuz/mini-app-types';
+import type { ModuleFactory, AppearanceModuleHandle, ResolvedPlatformResponse } from '../modules';
+import type { AppearanceType, PlatformTypeResponse } from '../types/common.types';
 import type { RpcMetricsSnapshot } from '../observability';
 import type { RpcMiddleware } from '../rpc';
 import { RpcClient } from '../rpc';
@@ -101,7 +101,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private readonly rpc: RpcClient;
   private readonly logger: Logger;
   private readonly registry = new ModuleRegistry();
-  private readonly setPlatformType: (type: PlatformTypeLiteral) => void;
+  private readonly applyPlatformResponse: (raw: unknown) => ResolvedPlatformResponse;
   private readonly appearanceHandle: AppearanceModuleHandle;
   private readonly appearanceUnsubscribers: Array<() => void> = [];
 
@@ -158,7 +158,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
     const platformHandle = createPlatformModule('web');
     this.platform = platformHandle.module;
-    this.setPlatformType = platformHandle.setType;
+    this.applyPlatformResponse = platformHandle.applyResponse;
 
     this.appearanceHandle = createAppearanceModule(this.rpc);
     this.appearance = this.appearanceHandle.module;
@@ -206,15 +206,30 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private async runInitializeSequence(): Promise<void> {
     this.rpc.start();
     await this.rpc.handshake();
-    const platformType = await this.rpc.request<PlatformTypeLiteral>(NAMESPACES.PLATFORM, ACTIONS.PLATFORM.GET_TYPE);
-    this.setPlatformType(platformType);
 
-    // Appearance is additive: a host that didn't negotiate it keeps the SDK
-    // fully functional (store defaults for locale/theme).
-    if (this.capabilities.includes(NAMESPACES.APPEARANCE)) {
+    // `platform.getType` answers in one of two shapes — a bare
+    // `"web"`/`"flutter"` string, or an object that also carries the host's
+    // appearance hint. `applyResponse` accepts both and hands back whichever
+    // hint rode along.
+    const raw = await this.rpc.request<PlatformTypeLiteral | PlatformTypeResponse>(
+      NAMESPACES.PLATFORM,
+      ACTIONS.PLATFORM.GET_TYPE,
+    );
+    const { type: platformType, appearance: appearanceHint } = this.applyPlatformResponse(raw);
+
+    // Host changes must be observed on every shell, including the Flutter
+    // one that delivers appearance via the hint and never negotiates the
+    // `appearance` namespace — so this is not gated on capabilities.
+    this.subscribeToAppearanceEvents();
+
+    if (appearanceHint) {
+      // The hint already carries the host's current locale/theme, so the
+      // `appearance.*` round trips below would only re-fetch what we have.
+      this.appearanceHandle.applyHint(appearanceHint);
+    } else if (this.capabilities.includes(NAMESPACES.APPEARANCE)) {
       await this.hydrateAppearance();
     } else {
-      this.logger.debug('Host did not negotiate appearance; skipping appearance hydration', {
+      this.logger.debug('Host sent no appearance hint and did not negotiate appearance; using defaults', {
         capabilities: this.capabilities,
       });
     }
@@ -223,20 +238,25 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.logger.info(`MiniAppSdk("${this.miniAppId}") initialized`, { platformType });
   }
 
-  private async hydrateAppearance(): Promise<void> {
-    // Subscribe first so no host change is missed while hydration is in flight.
+  private subscribeToAppearanceEvents(): void {
     this.appearanceUnsubscribers.push(
       this.on(APPEARANCE_EVENTS.LOCALE_CHANGED, (payload) => {
-        this.appearanceHandle.setLocale(payload as unknown as LocaleState);
+        this.appearanceHandle.applyHint({ locale: payload as AppearanceType['locale'] });
       }),
       this.on(APPEARANCE_EVENTS.THEME_CHANGED, (payload) => {
-        this.appearanceHandle.setTheme(payload as unknown as ThemeState);
+        this.appearanceHandle.applyHint({ theme: payload as AppearanceType['theme'] });
       }),
     );
+  }
 
-    // Bounded budget: appearance is additive and must never block first paint.
-    // If the host is slow or doesn't answer, initialize() still resolves and
-    // the app falls back to the store defaults.
+  /**
+   * Fallback for hosts that implement the `appearance` namespace but don't
+   * put the hint on `platform.getType` — i.e. any shell built against an
+   * earlier SDK. Bounded budget: appearance is additive and must never block
+   * first paint. If the host is slow or doesn't answer, initialize() still
+   * resolves and the app falls back to the store defaults.
+   */
+  private async hydrateAppearance(): Promise<void> {
     const hydration = Promise.all([
       this.appearance.getLocale(),
       this.appearance.getTheme(),

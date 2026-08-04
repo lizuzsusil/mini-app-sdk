@@ -4,12 +4,17 @@ export { createFlagsModule } from './flags.module';
 export { createConfigModule } from './config.module';
 export { createNavigationModule } from './navigation.module';
 export { createStorageModule } from './storage.module';
-export { createPlatformModule } from './platform.module';
-export type { PlatformModuleHandle } from './platform.module';
+export { createPlatformModule, normalizePlatformResponse } from './platform.module';
+export type { PlatformModuleHandle, ResolvedPlatformResponse } from './platform.module';
 export { createDeviceModule } from './device.module';
 export { createApiModule } from './api.module';
 export { createHttpModule } from './http.module';
-export { createAppearanceModule, APPEARANCE_EVENTS } from './appearance.module';
+export {
+  createAppearanceModule,
+  APPEARANCE_EVENTS,
+  normalizeLocale,
+  normalizeTheme,
+} from './appearance.module';
 export type { AppearanceModuleHandle } from './appearance.module';
 export { ModuleRegistry } from './module-registry';
 export type { ModuleFactory } from './module-registry';
