@@ -84,11 +84,4 @@ export interface MiniAppSdkOptions {
   maxRetryDelayMs?: number;
   /** Origin to pin for postMessage. Mapped to `allowedOrigin` internally. */
   targetOrigin?: string;
-  /**
-   * If true, assigns `Object.freeze(this)` to `window.__GSA_SDK__` so the
-   * shell can reference it globally. The global reference is deleted on
-   * `destroy()`. Only safe when at most one mini-app instance exists per
-   * window/tab at a time.
-   */
-  registerGlobal?: boolean;
 }

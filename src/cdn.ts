@@ -34,7 +34,6 @@ const registry = {
 
     const opts: MiniAppSdkOptions = {
       miniAppId,
-      registerGlobal: true,
       timeout: sdkOptions?.timeout,
       retryAttempts: sdkOptions?.retryAttempts,
       retryDelayMs: sdkOptions?.retryDelayMs,

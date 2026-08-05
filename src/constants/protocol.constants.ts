@@ -41,9 +41,9 @@ export const BROADCAST_TARGET = '*';
 export const HOST_DESCRIPTOR_GLOBAL_KEY = '__GSA_HOST_DESCRIPTOR__';
 
 /**
- * Global key the SDK assigns itself to when `registerGlobal` is enabled.
- * This gives the shell a well-known reference for one-mini-app-per-tab
- * scenarios without requiring the factory return value to be stored.
- * The reference is non-reassignable and deleted on `destroy()`.
+ * Global key the SDK always assigns itself to on `globalThis`. This gives
+ * the shell a well-known reference for one-mini-app-per-tab scenarios
+ * without requiring the factory return value to be stored. The reference is
+ * non-reassignable and deleted on `destroy()`.
  */
 export const SDK_GLOBAL_KEY = '__GSA_SDK__';

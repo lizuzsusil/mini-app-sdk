@@ -105,7 +105,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private readonly appearanceHandle: AppearanceModuleHandle;
   private readonly appearanceUnsubscribers: Array<() => void> = [];
 
-  private readonly registerGlobal: boolean;
   private initialized = false;
   private destroyed = false;
   private initializePromise: Promise<void> | null = null;
@@ -163,11 +162,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.appearanceHandle = createAppearanceModule(this.rpc);
     this.appearance = this.appearanceHandle.module;
 
-    this.registerGlobal = options.registerGlobal ?? false;
-    if (this.registerGlobal) {
-      if (typeof globalThis !== 'undefined') {
-        (globalThis as any)[SDK_GLOBAL_KEY] = this;
-      }
+    if (typeof globalThis !== 'undefined') {
+      (globalThis as any)[SDK_GLOBAL_KEY] = this;
     }
   }
 
@@ -276,10 +272,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.appearanceUnsubscribers.length = 0;
     this.initialized = false;
     this.destroyed = true;
-    if (this.registerGlobal && typeof globalThis !== 'undefined') {
-      if ((globalThis as any)[SDK_GLOBAL_KEY] === this) {
-        delete (globalThis as any)[SDK_GLOBAL_KEY];
-      }
+    if (typeof globalThis !== 'undefined' && (globalThis as any)[SDK_GLOBAL_KEY] === this) {
+      delete (globalThis as any)[SDK_GLOBAL_KEY];
     }
     this.logger.info(`MiniAppSdk("${this.miniAppId}") destroyed`);
   }
