@@ -66,7 +66,7 @@ export type {
 } from '@lizuz/mini-app-types';
 
 export type { HttpResult, HttpSdkModule } from '@lizuz/mini-app-types';
-export type { MiniAppSdkInterface, MiniAppSdkOptions, CreateInstanceOptions } from './sdk.types';
+export type { MiniAppSdkInterface, MiniAppSdkOptions } from './sdk.types';
 
 export type {
   Direction,

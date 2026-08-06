@@ -1,72 +1,41 @@
 import { MiniAppSdk } from './client';
 import type { MiniAppSdkDependencies } from './client';
-import type { CreateInstanceOptions, MiniAppSdkOptions } from './types';
-
-/** Map of miniAppId to MiniAppSdk instances */
-const instances = new Map<string, MiniAppSdk>();
+import type { MiniAppSdkOptions } from './types';
+import { SDK_GLOBAL_KEY } from './constants';
 
 /**
- * Global registry for managing MiniAppSdk lifecycle across a page.
- * Exposed on window as `getMiniAppBridge` when running in a browser.
+ * Global config the host shell sets on `window.__GSA_SDK__` before the CDN
+ * `<script>` tag runs. Shape matches `MiniAppSdkOptions`: `miniAppId` is
+ * required, everything else is optional tuning. The SDK overwrites this same
+ * key with the live instance once constructed.
  */
-const registry = {
-  /**
-   * Creates and initializes a new MiniAppSdk for the given module.
-   * If an instance already exists for the same miniAppId it is destroyed first.
-   * On success the new instance is stored and set as the active instance.
-   *
-   * @param miniAppId  - Unique identifier for the mini-app module
-   * @param _channel  - (reserved) Communication channel hint
-   * @param sdkOptions - Optional configuration overrides (timeout, retry, targetOrigin)
-   * @returns The initialized MiniAppSdk instance
-   */
-  async createInstance({
-    miniAppId,
-    channel: _channel,
-    sdkOptions,
-  }: CreateInstanceOptions) {
-    const existing = instances.get(miniAppId);
+export type CdnSdkConfig = MiniAppSdkOptions;
 
-    if (existing) {
-      existing.destroy();
-      instances.delete(miniAppId);
-    }
+/** Reads the host-provided config from `window.__GSA_SDK__`. */
+function resolveConfig(): MiniAppSdkOptions {
+  const config = typeof window !== 'undefined'
+    ? (window as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY]
+    : undefined;
+  if (config && typeof config === 'object' && typeof (config as MiniAppSdkOptions).miniAppId === 'string') {
+    return config as MiniAppSdkOptions;
+  }
+  throw new Error(
+    `Mini App SDK: missing global config. Set window.${SDK_GLOBAL_KEY} = { miniAppId, ... } before loading the script.`,
+  );
+}
 
-    const opts: MiniAppSdkOptions = {
-      miniAppId,
-      timeout: sdkOptions?.timeout,
-      retryAttempts: sdkOptions?.retryAttempts,
-      retryDelayMs: sdkOptions?.retryDelayMs,
-      maxRetryDelayMs: sdkOptions?.maxRetryDelayMs,
-    };
-    const deps: MiniAppSdkDependencies = {
-      allowedOrigin: sdkOptions?.targetOrigin,
-    };
-
-    const sdk = new MiniAppSdk(opts, deps);
-
-    try {
-      await sdk.initialize();
-
-      instances.set(miniAppId, sdk);
-
-      return sdk;
-    } catch (error) {
-      sdk.destroy();
-      throw error;
-    }
-  },
-
-  destroyInstance(miniAppId: string) {
-    const sdk = instances.get(miniAppId);
-    if (sdk) {
-      sdk.destroy();
-      instances.delete(miniAppId);
-    }
-  },
+const opts = resolveConfig();
+const deps: MiniAppSdkDependencies = {
+  allowedOrigin: opts.targetOrigin,
 };
 
-/** Expose the registry globally so that parent frames / host apps can interact with it */
-if (typeof window !== 'undefined') {
-  (window as unknown as { getMiniAppBridge: () => typeof registry }).getMiniAppBridge = () => registry;
-}
+/**
+ * Single, page-wide MiniAppSdk instance. Constructing it overwrites
+ * `window.__GSA_SDK__` (the pre-load config) with the instance; `destroy()`
+ * removes it again.
+ */
+const sdk = new MiniAppSdk(opts, deps);
+void sdk.initialize().catch((error) => {
+  console.error(`Mini App SDK("${opts.miniAppId}") initialization failed`, error);
+  sdk.destroy();
+});

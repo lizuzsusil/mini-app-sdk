@@ -63,12 +63,6 @@ export interface MiniAppSdkInterface {
   getModule<T>(name: string): T | undefined;
 }
 
-export interface CreateInstanceOptions {
-  miniAppId: string;
-  channel?: string;
-  sdkOptions?: MiniAppSdkOptions;
-};
-
 /**
  * Constructor options for `MiniAppSdk`. `transport` is deliberately *not*
  * part of this type (see `client/MiniAppSdk.ts`) — transport injection is a

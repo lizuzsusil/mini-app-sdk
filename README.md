@@ -53,6 +53,26 @@ const unsubscribe = sdk.on('notification.received', (payload) => {
 sdk.destroy();
 ```
 
+### CDN (script tag)
+
+For hosts that load the SDK from a CDN rather than via `npm`, set the config
+on `window.__GSA_SDK__` before the script tag runs:
+
+```html
+<script>
+  window.__GSA_SDK__ = {
+    miniAppId: 'my-mini-app',
+    timeout: 10000,
+    targetOrigin: 'https://shell.example.com',
+  };
+</script>
+<script src="https://cdn.example.com/sewa-sdk.min.js"></script>
+```
+
+The bundle reads that config, then creates and initializes a single,
+page-wide instance and overwrites `window.__GSA_SDK__` with it (removed on
+`destroy()`). One mini app per tab.
+
 ### React Integration
 
 ```tsx

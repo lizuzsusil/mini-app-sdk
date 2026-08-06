@@ -41,9 +41,10 @@ export const BROADCAST_TARGET = '*';
 export const HOST_DESCRIPTOR_GLOBAL_KEY = '__GSA_HOST_DESCRIPTOR__';
 
 /**
- * Global key the SDK always assigns itself to on `globalThis`. This gives
- * the shell a well-known reference for one-mini-app-per-tab scenarios
- * without requiring the factory return value to be stored. The reference is
- * non-reassignable and deleted on `destroy()`.
+ * The single well-known global for the SDK. Before the CDN `<script>` tag
+ * runs, the host shell sets it to the config (a `MiniAppSdkOptions` object)
+ * the CDN build reads at load. The SDK then overwrites it with the live
+ * instance, giving the shell a reference to `window.__GSA_SDK__` for
+ * one-mini-app-per-tab scenarios. The instance is deleted on `destroy()`.
  */
 export const SDK_GLOBAL_KEY = '__GSA_SDK__';
