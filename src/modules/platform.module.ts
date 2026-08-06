@@ -1,9 +1,9 @@
-import type { PlatformSdkModule } from '../types/platform.types';
+import type { PlatformSdkModule } from "../types/platform.types";
 import type {
   AppearanceType,
   PlatformTypeLiteral,
   PlatformTypeResponse,
-} from '../types/common.types';
+} from "../types/common.types";
 
 /** What a `platform.getType` reply resolves to once normalized. */
 export interface ResolvedPlatformResponse {
@@ -33,7 +33,7 @@ export interface PlatformModuleHandle {
 }
 
 const isPlatformType = (value: unknown): value is PlatformTypeLiteral =>
-  value === 'web' || value === 'flutter';
+  value === "web" || value === "flutter";
 
 /**
  * Normalizes whatever the host answered `platform.getType` with. The web
@@ -50,14 +50,19 @@ export function normalizePlatformResponse(
     return { type: raw, appearance: null };
   }
 
-  if (raw && typeof raw === 'object') {
+  if (raw && typeof raw === "object") {
     const response = raw as PlatformTypeResponse;
     const candidate = response.type ?? response.types;
     const appearance = response.appearance;
+    // Either field may arrive as a loose string (`'dark'`, `'si-LK'`) or as a
+    // full `ThemeState`/`LocaleState` object — the appearance module coerces
+    // both, so accept both here rather than only the string form.
+    const isHintValue = (value: unknown): boolean =>
+      typeof value === "string" || (!!value && typeof value === "object");
     const hasHint =
       !!appearance &&
-      typeof appearance === 'object' &&
-      (typeof appearance.theme === 'string' || typeof appearance.locale === 'string');
+      typeof appearance === "object" &&
+      (isHintValue(appearance.theme) || isHintValue(appearance.locale));
 
     return {
       type: isPlatformType(candidate) ? candidate : fallbackType,
@@ -76,16 +81,18 @@ export function normalizePlatformResponse(
  * except through the `setType`/`applyResponse` handle returned alongside the
  * module.
  */
-export function createPlatformModule(initialType: PlatformTypeLiteral = 'web'): PlatformModuleHandle {
+export function createPlatformModule(
+  initialType: PlatformTypeLiteral = "web",
+): PlatformModuleHandle {
   let type: PlatformTypeLiteral = initialType;
 
   const module: PlatformSdkModule = {
     get type() {
       return type;
     },
-    isWeb: () => type === 'web',
-    isFlutter: () => type === 'flutter',
-    isMobile: () => type === 'flutter',
+    isWeb: () => type === "web",
+    isFlutter: () => type === "flutter",
+    isMobile: () => type === "flutter",
   };
 
   const setType = (newType: PlatformTypeLiteral): void => {
