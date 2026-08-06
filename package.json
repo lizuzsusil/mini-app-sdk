@@ -1,6 +1,6 @@
 {
   "name": "@lizuz/sewa-sdk",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell.",
   "main": "./dist/sewa-sdk.js",
   "module": "./dist/sewa-sdk.mjs",
