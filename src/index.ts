@@ -10,6 +10,7 @@ export {
   PROTOCOL_VERSION,
   PLATFORM_EVENT_NAME,
   MESSAGE_CHANNEL,
+  NAVIGATION_EVENTS,
 } from './constants';
 
 export type {
@@ -21,6 +22,9 @@ export type {
   NavigationSdkModule,
   NavigationTarget,
   NavigationState,
+  NavigationRouterSdkModule,
+  NavigationRouterSkdModule,
+  NavigationRouterResult,
   HostDescriptor,
   PlatformSdkModule,
   PlatformTypeLiteral,

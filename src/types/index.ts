@@ -19,6 +19,18 @@ export type {
   NavigationTarget,
   NavigationState,
   NavigationSdkModule,
+  NavigationRouterResult,
+} from '@lizuz/mini-app-types';
+
+/**
+ * `@lizuz/mini-app-types` spells this one `…SkdModule`. Re-exported under
+ * the corrected name so nothing in this SDK — or in a mini app consuming
+ * it — has to repeat the typo; the original spelling is kept alongside so
+ * code already written against the types package still compiles.
+ */
+export type {
+  NavigationRouterSkdModule as NavigationRouterSdkModule,
+  NavigationRouterSkdModule,
 } from '@lizuz/mini-app-types';
 
 export type {

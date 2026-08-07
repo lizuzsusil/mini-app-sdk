@@ -67,6 +67,8 @@ export const ACTIONS = {
   NAVIGATION: {
     NAVIGATE: 'navigate',
     GET_CURRENT: 'getCurrent',
+    BACK: 'back',
+    PUSH: 'push',
   },
   PLATFORM: {
     GET_TYPE: 'getType',
@@ -110,4 +112,20 @@ export const ACTIONS = {
   HANDSHAKE: {
     CONNECT: 'connect',
   },
+} as const;
+
+/**
+ * Navigation events on the wire, in both directions:
+ *
+ *  - `BACK_REQUESTED` (host → mini app) is published when the user presses
+ *    the native back button. The host holds the container open until the
+ *    mini app answers with `navigation.router.back(consumed)`; `false`
+ *    means "I'm at my root, you take over".
+ *  - `ROUTE_CHANGED` (mini app → host) is what a mini app `emit()`s after
+ *    its own router moved, so the host can keep its back-button policy in
+ *    sync without polling `navigation.getCurrent()`.
+ */
+export const NAVIGATION_EVENTS = {
+  BACK_REQUESTED: 'navigation.back.requested',
+  ROUTE_CHANGED: 'navigation.route.changed',
 } as const;
