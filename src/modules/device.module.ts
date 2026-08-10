@@ -5,11 +5,12 @@ import type {
   DeviceBiometricResult,
   DeviceCameraResult,
   DeviceContactResult,
+  DeviceDownloadOptions,
+  DeviceDownloadResult,
   DeviceExtraOptions,
   DeviceFileOptions,
   DeviceFileResult,
   DeviceGalleryResult,
-  DeviceDownloadResult,
   DeviceInfoResult,
   DeviceLocationResult,
   DeviceNetworkResult,
@@ -17,9 +18,7 @@ import type {
   DeviceNotificationsOptions,
   DevicePermissionBaseResponse,
   DeviceSdkModule,
-  DeviceDownloadOptions
 } from "../types";
-
 
 export function createDeviceModule(rpc: RpcClient): DeviceSdkModule {
   return {

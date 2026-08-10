@@ -1,7 +1,7 @@
-import { MiniAppSdk } from './client';
-import type { MiniAppSdkDependencies } from './client';
-import type { MiniAppSdkOptions } from './types';
-import { SDK_GLOBAL_KEY } from './constants';
+import type { MiniAppSdkDependencies } from "./client";
+import { MiniAppSdk } from "./client";
+import { SDK_GLOBAL_KEY } from "./constants";
+import type { MiniAppSdkOptions } from "./types";
 
 /**
  * Global config the host shell sets on `window.__GSA_SDK__` before the CDN
@@ -13,10 +13,15 @@ export type CdnSdkConfig = MiniAppSdkOptions;
 
 /** Reads the host-provided config from `window.__GSA_SDK__`. */
 function resolveConfig(): MiniAppSdkOptions {
-  const config = typeof window !== 'undefined'
-    ? (window as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY]
-    : undefined;
-  if (config && typeof config === 'object' && typeof (config as MiniAppSdkOptions).miniAppId === 'string') {
+  const config =
+    typeof window !== "undefined"
+      ? (window as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY]
+      : undefined;
+  if (
+    config &&
+    typeof config === "object" &&
+    typeof (config as MiniAppSdkOptions).miniAppId === "string"
+  ) {
     return config as MiniAppSdkOptions;
   }
   throw new Error(
@@ -36,6 +41,9 @@ const deps: MiniAppSdkDependencies = {
  */
 const sdk = new MiniAppSdk(opts, deps);
 void sdk.initialize().catch((error) => {
-  console.error(`Mini App SDK("${opts.miniAppId}") initialization failed`, error);
+  console.error(
+    `Mini App SDK("${opts.miniAppId}") initialization failed`,
+    error,
+  );
   sdk.destroy();
 });

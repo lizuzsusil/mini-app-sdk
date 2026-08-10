@@ -1,92 +1,80 @@
-import { MiniAppSdk } from './client';
-import type { MiniAppSdkOptions } from './types';
-import { SdkError } from './errors';
+import { MiniAppSdk } from "./client";
+import { SdkError } from "./errors";
+import type { MiniAppSdkOptions } from "./types";
 
-export { MiniAppSdk } from './client';
-
-export type { AppearanceModuleHandle } from './modules';
-
+export { MiniAppSdk } from "./client";
 export {
-  PROTOCOL_VERSION,
-  PLATFORM_EVENT_NAME,
   MESSAGE_CHANNEL,
   NAVIGATION_EVENTS,
-} from './constants';
-
+  PLATFORM_EVENT_NAME,
+  PROTOCOL_VERSION,
+} from "./constants";
+export type { SdkErrorCode } from "./errors";
+export { SdkError } from "./errors";
+export type { ConsoleLoggerOptions, Logger } from "./logging";
+export { ConsoleLogger, NoopLogger } from "./logging";
+export type { AppearanceModuleHandle } from "./modules";
+export type { ActionMetrics, RpcMetricsSnapshot } from "./observability";
+export type { RpcMiddleware, RpcMiddlewareContext, RpcNext } from "./rpc";
+export { StreamBuilder } from "./stream";
 export type {
-  PlatformUser,
-  AuthSdkModule,
-  PermissionsSdkModule,
-  FlagsSdkModule,
-  ConfigSdkModule,
-  NavigationSdkModule,
-  NavigationTarget,
-  NavigationState,
-  NavigationRouterSdkModule,
-  NavigationRouterSkdModule,
-  NavigationRouterResult,
-  HostDescriptor,
-  PlatformSdkModule,
-  PlatformTypeLiteral,
-  StorageSdkModule,
-  DeviceSdkModule,
-  DevicePermissionStatus,
-  DevicePermissionBaseResponse,
-  DeviceExtraOptions,
-  DeviceFileOptions,
-  DeviceCameraResult,
-  DeviceGalleryResult,
-  DeviceFileResult,
-  DeviceLocationResult,
-  DeviceBiometricOptions,
-  DeviceBiometricResult,
-  DeviceNotificationsOptions,
-  DeviceNotificationResult,
-  DeviceNetworkResult,
-  DeviceInfoResult,
-  ApiSdkModule,
   ApiRequestParams,
   ApiResult,
-  HttpMethod,
-  HttpSdkModule,
+  ApiSdkModule,
+  AppearanceSdkModule,
+  AppearanceState,
+  AuthSdkModule,
+  ChatMessage,
+  ChatSdkModule,
+  ConfigSdkModule,
+  DeviceBiometricOptions,
+  DeviceBiometricResult,
+  DeviceCameraResult,
+  DeviceExtraOptions,
+  DeviceFileOptions,
+  DeviceFileResult,
+  DeviceGalleryResult,
+  DeviceInfoResult,
+  DeviceLocationResult,
+  DeviceNetworkResult,
+  DeviceNotificationResult,
+  DeviceNotificationsOptions,
+  DevicePermissionBaseResponse,
+  DevicePermissionStatus,
+  DeviceSdkModule,
+  Direction,
+  EventHandler,
+  FlagsSdkModule,
+  HostDescriptor,
+  HttpDeleteParams,
   HttpGetParams,
+  HttpMethod,
+  HttpPatchParams,
   HttpPostParams,
   HttpPutParams,
-  HttpPatchParams,
-  HttpDeleteParams,
   HttpResult,
+  HttpSdkModule,
+  LocaleState,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
-  EventHandler,
-  ChatSdkModule,
-  ChatMessage,
   ModelCompletionOptions,
+  NavigationRouterResult,
+  NavigationRouterSdkModule,
+  NavigationRouterSkdModule,
+  NavigationSdkModule,
+  NavigationState,
+  NavigationTarget,
+  PermissionsSdkModule,
+  PlatformSdkModule,
+  PlatformTypeLiteral,
+  PlatformUser,
+  StorageSdkModule,
   StreamChunk,
   StreamError,
-} from './types';
-
-export { StreamBuilder } from './stream';
-
-export type {
-  Direction,
-  ThemePreference,
   ThemeMode,
-  LocaleState,
+  ThemePreference,
   ThemeState,
-  AppearanceState,
-  AppearanceSdkModule,
-} from './types';
-
-export { SdkError } from './errors';
-export type { SdkErrorCode } from './errors';
-
-export type { Logger } from './logging';
-export { ConsoleLogger, NoopLogger } from './logging';
-export type { ConsoleLoggerOptions } from './logging';
-
-export type { RpcMiddleware, RpcMiddlewareContext, RpcNext } from './rpc';
-
-export type { RpcMetricsSnapshot, ActionMetrics } from './observability';
+} from "./types";
 
 /**
  * Module-scoped "active instance" used only by the `createMiniAppSdk` /
@@ -109,15 +97,17 @@ export function createMiniAppSdk(options: MiniAppSdkOptions): MiniAppSdk {
 export function getMiniAppSdk(): MiniAppSdk {
   if (!activeInstance) {
     throw new SdkError({
-      code: 'SDK_NOT_INITIALIZED',
-      message: 'Mini App SDK not initialized. Call initMiniAppSdk() first.',
+      code: "SDK_NOT_INITIALIZED",
+      message: "Mini App SDK not initialized. Call initMiniAppSdk() first.",
     });
   }
   return activeInstance;
 }
 
 /** Constructs, initializes, and registers a `MiniAppSdk` as the active instance. */
-export async function initMiniAppSdk(options: MiniAppSdkOptions): Promise<MiniAppSdk> {
+export async function initMiniAppSdk(
+  options: MiniAppSdkOptions,
+): Promise<MiniAppSdk> {
   const sdk = new MiniAppSdk(options);
   await sdk.initialize();
   activeInstance = sdk;

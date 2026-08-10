@@ -1,5 +1,8 @@
-import type { ChatMessage, ModelCompletionOptions } from '@lizuz/mini-app-types';
-import type { StreamBuilder } from '../stream';
+import type {
+  ChatMessage,
+  ModelCompletionOptions,
+} from "@lizuz/mini-app-types";
+import type { StreamBuilder } from "../stream";
 
 /**
  * The AI/chat module. `chat()` streams the host model's completion back

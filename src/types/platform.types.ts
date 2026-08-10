@@ -1,4 +1,4 @@
-import type { PlatformTypeLiteral } from './common.types';
+import type { PlatformTypeLiteral } from "./common.types";
 
 /**
  * Static descriptor injected by the shell before the mini-app mounts.
@@ -10,7 +10,7 @@ import type { PlatformTypeLiteral } from './common.types';
  */
 export interface HostDescriptor {
   /** The host shell type: `flutter` (mobile WebView) or `web` (Next.js). */
-  type: 'flutter' | 'web';
+  type: "flutter" | "web";
   /** Semver string of the shell release. */
   version: string;
   /** Capability strings the shell supports, e.g. `["storage", "api", "gps", "camera"]`. */

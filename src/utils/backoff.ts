@@ -25,7 +25,11 @@
  *
  * `attempt` is zero-based, so `attempt = 0` is the delay before the first retry.
  */
-export function computeBackoffMs(attempt: number, baseMs: number, maxMs: number): number {
+export function computeBackoffMs(
+  attempt: number,
+  baseMs: number,
+  maxMs: number,
+): number {
   const exponential = baseMs * 2 ** attempt;
   const capped = Math.min(exponential, maxMs);
   const jitter = capped * 0.3 * Math.random();

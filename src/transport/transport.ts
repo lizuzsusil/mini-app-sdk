@@ -1,4 +1,4 @@
-import type { PlatformMessage } from '../protocol';
+import type { PlatformMessage } from "../protocol";
 
 /**
  * A `Transport` is a dumb pipe: it can start listening, stop listening, and

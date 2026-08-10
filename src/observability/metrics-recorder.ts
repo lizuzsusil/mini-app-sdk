@@ -1,4 +1,4 @@
-import type { ActionMetrics, RpcMetricsSnapshot } from './metrics.types';
+import type { ActionMetrics, RpcMetricsSnapshot } from "./metrics.types";
 
 function emptyActionMetrics(): ActionMetrics {
   return {
@@ -32,7 +32,12 @@ export class MetricsRecorder {
     metrics.averageDurationMs = metrics.totalDurationMs / metrics.count;
   }
 
-  recordFailure(namespace: string, action: string, durationMs: number, wasTimeout: boolean): void {
+  recordFailure(
+    namespace: string,
+    action: string,
+    durationMs: number,
+    wasTimeout: boolean,
+  ): void {
     const metrics = this.getOrCreate(namespace, action);
     metrics.count += 1;
     metrics.failures += 1;
@@ -71,7 +76,8 @@ export class MetricsRecorder {
       totalFailures,
       totalTimeouts,
       totalRetries,
-      averageDurationMs: totalRequests > 0 ? totalDurationMs / totalRequests : 0,
+      averageDurationMs:
+        totalRequests > 0 ? totalDurationMs / totalRequests : 0,
       byAction,
     };
   }

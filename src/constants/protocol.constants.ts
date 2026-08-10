@@ -4,41 +4,41 @@
  * backward-incompatible way. Phase 1 stamps every message with this value
  * but does not yet negotiate it against the host (see Phase 2).
  */
-export const PROTOCOL_VERSION = '1.0.0';
+export const PROTOCOL_VERSION = "1.0.0";
 
 /**
  * Value written to `PlatformMessage.channel`. Used by hosts to distinguish
  * SDK protocol messages from unrelated `postMessage` traffic on the same
  * window.
  */
-export const MESSAGE_CHANNEL = 'gov-platform-sdk';
+export const MESSAGE_CHANNEL = "gov-platform-sdk";
 
 /**
  * Name of the `CustomEvent` a host may dispatch as a secondary inbound
  * channel (used by non-`postMessage` hosts, e.g. a Flutter WebView bridge
  * that cannot easily synthesize a `MessageEvent`).
  */
-export const PLATFORM_EVENT_NAME = 'gov-platform-event';
+export const PLATFORM_EVENT_NAME = "gov-platform-event";
 
 /**
  * The logical identity of the host application on the other end of the
  * transport. Every outbound request/handshake message is addressed to this
  * target.
  */
-export const HOST_TARGET = 'shell';
+export const HOST_TARGET = "shell";
 
 /**
  * Wildcard target: a host broadcasting to every connected mini app uses this
  * value instead of a specific `miniAppId`.
  */
-export const BROADCAST_TARGET = '*';
+export const BROADCAST_TARGET = "*";
 
 /**
  * Global key the shell sets before mounting a mini-app with the static host
  * descriptor (type, version, capabilities, sdkVersion). The SDK reads this
  * at construction time. See `HostDescriptor` in `types/platform.types.ts`.
  */
-export const HOST_DESCRIPTOR_GLOBAL_KEY = '__GSA_HOST_DESCRIPTOR__';
+export const HOST_DESCRIPTOR_GLOBAL_KEY = "__GSA_HOST_DESCRIPTOR__";
 
 /**
  * The single well-known global for the SDK. Before the CDN `<script>` tag
@@ -47,4 +47,4 @@ export const HOST_DESCRIPTOR_GLOBAL_KEY = '__GSA_HOST_DESCRIPTOR__';
  * instance, giving the shell a reference to `window.__GSA_SDK__` for
  * one-mini-app-per-tab scenarios. The instance is deleted on `destroy()`.
  */
-export const SDK_GLOBAL_KEY = '__GSA_SDK__';
+export const SDK_GLOBAL_KEY = "__GSA_SDK__";

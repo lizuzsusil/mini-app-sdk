@@ -1,6 +1,10 @@
-import { MESSAGE_CHANNEL, PROTOCOL_VERSION } from '../constants';
-import { generateId } from '../utils';
-import type { MessageType, PlatformError, PlatformMessage } from './message.types';
+import { MESSAGE_CHANNEL, PROTOCOL_VERSION } from "../constants";
+import { generateId } from "../utils";
+import type {
+  MessageType,
+  PlatformError,
+  PlatformMessage,
+} from "./message.types";
 
 export interface CreateMessageOptions {
   requestId?: string;
@@ -22,7 +26,7 @@ export function createMessage<TPayload = unknown>(
   source: string,
   target: string,
   payload?: TPayload,
-  options?: CreateMessageOptions
+  options?: CreateMessageOptions,
 ): PlatformMessage<TPayload> {
   return {
     channel: MESSAGE_CHANNEL,

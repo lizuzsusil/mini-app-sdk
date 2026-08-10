@@ -1,50 +1,63 @@
-import { SdkError } from '../errors';
-import type { Logger } from '../logging';
-import { noopLogger } from '../logging';
-import { delay } from '../utils';
-import { ACTIONS, HOST_DESCRIPTOR_GLOBAL_KEY, NAMESPACES, PROTOCOL_VERSION, SDK_GLOBAL_KEY } from '../constants';
 import {
-  ModuleRegistry,
+  ACTIONS,
+  HOST_DESCRIPTOR_GLOBAL_KEY,
+  NAMESPACES,
+  PROTOCOL_VERSION,
+  SDK_GLOBAL_KEY,
+} from "../constants";
+import { SdkError } from "../errors";
+import type { Logger } from "../logging";
+import { noopLogger } from "../logging";
+import type {
+  AppearanceModuleHandle,
+  ModuleFactory,
+  ResolvedPlatformResponse,
+} from "../modules";
+import {
+  APPEARANCE_EVENTS,
   createApiModule,
   createAppearanceModule,
   createAuthModule,
+  createChatModule,
   createConfigModule,
   createDeviceModule,
   createFlagsModule,
-  createNavigationModule,
   createHttpModule,
-  createChatModule,
+  createNavigationModule,
   createPermissionsModule,
   createPlatformModule,
   createStorageModule,
-  APPEARANCE_EVENTS,
-} from '../modules';
-import type { ModuleFactory, AppearanceModuleHandle, ResolvedPlatformResponse } from '../modules';
-import type { AppearanceType, PlatformTypeResponse } from '../types/common.types';
-import type { RpcMetricsSnapshot } from '../observability';
-import type { RpcMiddleware } from '../rpc';
-import { RpcClient } from '../rpc';
-import { DefaultTransport } from '../transport';
-import type { Transport } from '../transport';
+  ModuleRegistry,
+} from "../modules";
+import type { RpcMetricsSnapshot } from "../observability";
+import type { RpcMiddleware } from "../rpc";
+import { RpcClient } from "../rpc";
+import type { Transport } from "../transport";
+import { DefaultTransport } from "../transport";
 import type {
   ApiSdkModule,
   AppearanceSdkModule,
   AuthSdkModule,
+  ChatSdkModule,
   ConfigSdkModule,
   DeviceSdkModule,
   EventHandler,
   FlagsSdkModule,
   HostDescriptor,
+  HttpSdkModule,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
   NavigationSdkModule,
   PermissionsSdkModule,
   PlatformSdkModule,
   PlatformTypeLiteral,
-  HttpSdkModule,
   StorageSdkModule,
-  ChatSdkModule,
-} from '../types';
+} from "../types";
+import type {
+  AppearanceType,
+  PlatformTypeResponse,
+} from "../types/common.types";
+import { delay } from "../utils";
 
 /**
  * Extra, internal-only construction knobs. Deliberately **not** part of
@@ -104,7 +117,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private readonly rpc: RpcClient;
   private readonly logger: Logger;
   private readonly registry = new ModuleRegistry();
-  private readonly applyPlatformResponse: (raw: unknown) => ResolvedPlatformResponse;
+  private readonly applyPlatformResponse: (
+    raw: unknown,
+  ) => ResolvedPlatformResponse;
   private readonly appearanceHandle: AppearanceModuleHandle;
   private readonly appearanceUnsubscribers: Array<() => void> = [];
 
@@ -112,16 +127,24 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private destroyed = false;
   private initializePromise: Promise<void> | null = null;
 
-  constructor(options: MiniAppSdkOptions, dependencies: MiniAppSdkDependencies = {}) {
+  constructor(
+    options: MiniAppSdkOptions,
+    dependencies: MiniAppSdkDependencies = {},
+  ) {
     this.miniAppId = options.miniAppId;
     this.logger = dependencies.logger ?? noopLogger;
 
-    this.hostDescriptor = typeof window !== 'undefined'
-      ? (window as any)[HOST_DESCRIPTOR_GLOBAL_KEY] ?? null
-      : null;
+    this.hostDescriptor =
+      typeof window !== "undefined"
+        ? ((window as any)[HOST_DESCRIPTOR_GLOBAL_KEY] ?? null)
+        : null;
 
     const transport =
-      dependencies.transport ?? new DefaultTransport({ logger: this.logger, allowedOrigin: dependencies.allowedOrigin });
+      dependencies.transport ??
+      new DefaultTransport({
+        logger: this.logger,
+        allowedOrigin: dependencies.allowedOrigin,
+      });
     this.rpc = new RpcClient(transport, {
       miniAppId: options.miniAppId,
       timeout: options.timeout,
@@ -150,24 +173,28 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.build(this.rpc);
 
     this.auth = this.registry.get<AuthSdkModule>(NAMESPACES.AUTH)!;
-    this.permissions = this.registry.get<PermissionsSdkModule>(NAMESPACES.PERMISSIONS)!;
+    this.permissions = this.registry.get<PermissionsSdkModule>(
+      NAMESPACES.PERMISSIONS,
+    )!;
     this.flags = this.registry.get<FlagsSdkModule>(NAMESPACES.FLAGS)!;
     this.config = this.registry.get<ConfigSdkModule>(NAMESPACES.CONFIG)!;
-    this.navigation = this.registry.get<NavigationSdkModule>(NAMESPACES.NAVIGATION)!;
+    this.navigation = this.registry.get<NavigationSdkModule>(
+      NAMESPACES.NAVIGATION,
+    )!;
     this.storage = this.registry.get<StorageSdkModule>(NAMESPACES.STORAGE)!;
     this.device = this.registry.get<DeviceSdkModule>(NAMESPACES.DEVICE)!;
     this.api = this.registry.get<ApiSdkModule>(NAMESPACES.API)!;
     this.http = this.registry.get<HttpSdkModule>(NAMESPACES.HTTP)!;
     this.ai = this.registry.get<ChatSdkModule>(NAMESPACES.AI)!;
 
-    const platformHandle = createPlatformModule('web');
+    const platformHandle = createPlatformModule("web");
     this.platform = platformHandle.module;
     this.applyPlatformResponse = platformHandle.applyResponse;
 
     this.appearanceHandle = createAppearanceModule(this.rpc);
     this.appearance = this.appearanceHandle.module;
 
-    if (typeof globalThis !== 'undefined') {
+    if (typeof globalThis !== "undefined") {
       (globalThis as any)[SDK_GLOBAL_KEY] = this;
     }
   }
@@ -189,7 +216,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   async initialize(): Promise<void> {
     if (this.destroyed) {
       throw new SdkError({
-        code: 'SDK_ALREADY_DESTROYED',
+        code: "SDK_ALREADY_DESTROYED",
         message: `Cannot initialize MiniAppSdk("${this.miniAppId}") — this instance has already been destroyed.`,
       });
     }
@@ -212,11 +239,11 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     // `"web"`/`"flutter"` string, or an object that also carries the host's
     // appearance hint. `applyResponse` accepts both and hands back whichever
     // hint rode along.
-    const raw = await this.rpc.request<PlatformTypeLiteral | PlatformTypeResponse>(
-      NAMESPACES.PLATFORM,
-      ACTIONS.PLATFORM.GET_TYPE,
-    );
-    const { type: platformType, appearance: appearanceHint } = this.applyPlatformResponse(raw);
+    const raw = await this.rpc.request<
+      PlatformTypeLiteral | PlatformTypeResponse
+    >(NAMESPACES.PLATFORM, ACTIONS.PLATFORM.GET_TYPE);
+    const { type: platformType, appearance: appearanceHint } =
+      this.applyPlatformResponse(raw);
 
     // Host changes must be observed on every shell, including the Flutter
     // one that delivers appearance via the hint and never negotiates the
@@ -230,22 +257,31 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     } else if (this.capabilities.includes(NAMESPACES.APPEARANCE)) {
       await this.hydrateAppearance();
     } else {
-      this.logger.debug('Host sent no appearance hint and did not negotiate appearance; using defaults', {
-        capabilities: this.capabilities,
-      });
+      this.logger.debug(
+        "Host sent no appearance hint and did not negotiate appearance; using defaults",
+        {
+          capabilities: this.capabilities,
+        },
+      );
     }
 
     this.initialized = true;
-    this.logger.info(`MiniAppSdk("${this.miniAppId}") initialized`, { platformType });
+    this.logger.info(`MiniAppSdk("${this.miniAppId}") initialized`, {
+      platformType,
+    });
   }
 
   private subscribeToAppearanceEvents(): void {
     this.appearanceUnsubscribers.push(
       this.on(APPEARANCE_EVENTS.LOCALE_CHANGED, (payload) => {
-        this.appearanceHandle.applyHint({ locale: payload as AppearanceType['locale'] });
+        this.appearanceHandle.applyHint({
+          locale: payload as AppearanceType["locale"],
+        });
       }),
       this.on(APPEARANCE_EVENTS.THEME_CHANGED, (payload) => {
-        this.appearanceHandle.applyHint({ theme: payload as AppearanceType['theme'] });
+        this.appearanceHandle.applyHint({
+          theme: payload as AppearanceType["theme"],
+        });
       }),
     );
   }
@@ -277,7 +313,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.appearanceUnsubscribers.length = 0;
     this.initialized = false;
     this.destroyed = true;
-    if (typeof globalThis !== 'undefined' && (globalThis as any)[SDK_GLOBAL_KEY] === this) {
+    if (
+      typeof globalThis !== "undefined" &&
+      (globalThis as any)[SDK_GLOBAL_KEY] === this
+    ) {
       delete (globalThis as any)[SDK_GLOBAL_KEY];
     }
     this.logger.info(`MiniAppSdk("${this.miniAppId}") destroyed`);
@@ -295,11 +334,13 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
   /** @inheritdoc */
   emit(event: string, data?: unknown): void {
-    this.rpc.request(NAMESPACES.EVENT, ACTIONS.EVENT.EMIT, { event, data }).catch((error: unknown) => {
-      this.logger.warn(`Emit event "${event}" failed`, {
-        error: error instanceof Error ? error.message : String(error),
+    this.rpc
+      .request(NAMESPACES.EVENT, ACTIONS.EVENT.EMIT, { event, data })
+      .catch((error: unknown) => {
+        this.logger.warn(`Emit event "${event}" failed`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
-    });
   }
 
   /**

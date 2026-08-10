@@ -1,9 +1,9 @@
-import type { PlatformSdkModule } from "../types/platform.types";
 import type {
   AppearanceType,
   PlatformTypeLiteral,
   PlatformTypeResponse,
 } from "../types/common.types";
+import type { PlatformSdkModule } from "../types/platform.types";
 
 /** What a `platform.getType` reply resolves to once normalized. */
 export interface ResolvedPlatformResponse {

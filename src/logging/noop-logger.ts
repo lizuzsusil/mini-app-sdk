@@ -1,4 +1,4 @@
-import type { Logger } from './logger';
+import type { Logger } from "./logger";
 
 /**
  * A `Logger` that discards everything. This is the SDK's default logger so

@@ -1,5 +1,5 @@
-import type { PlatformMessage } from '../protocol';
-import type { Transport } from '../transport';
+import type { PlatformMessage } from "../protocol";
+import type { Transport } from "../transport";
 
 /**
  * An in-memory `Transport` implementation for unit tests. Records every

@@ -1,12 +1,12 @@
-import { ACTIONS, NAMESPACES } from '../constants';
-import type { RpcClient } from '../rpc';
+import { ACTIONS, NAMESPACES } from "../constants";
+import type { RpcClient } from "../rpc";
 import type {
   NavigationRouterResult,
   NavigationRouterSdkModule,
   NavigationSdkModule,
   NavigationState,
   NavigationTarget,
-} from '../types';
+} from "../types";
 
 /**
  * Coerces the host's reply into a `NavigationRouterResult`.
@@ -18,11 +18,14 @@ import type {
  * resolving to a usable object on every shell, so mini-app code can read
  * `result.consumed` unconditionally instead of guarding for `undefined`.
  */
-function toRouterResult(raw: unknown, requested: boolean): NavigationRouterResult {
-  if (typeof raw === 'boolean') return { consumed: raw };
-  if (raw && typeof raw === 'object') {
+function toRouterResult(
+  raw: unknown,
+  requested: boolean,
+): NavigationRouterResult {
+  if (typeof raw === "boolean") return { consumed: raw };
+  if (raw && typeof raw === "object") {
     const { consumed } = raw as Partial<NavigationRouterResult>;
-    if (typeof consumed === 'boolean') return { consumed };
+    if (typeof consumed === "boolean") return { consumed };
   }
   return { consumed: requested };
 }
@@ -52,7 +55,11 @@ function createNavigationRouter(rpc: RpcClient): NavigationRouterSdkModule {
      * left, which hands the back press back to the host.
      */
     async back(consumed = true): Promise<NavigationRouterResult> {
-      const raw = await rpc.request<unknown>(NAMESPACES.NAVIGATION, ACTIONS.NAVIGATION.BACK, { consumed });
+      const raw = await rpc.request<unknown>(
+        NAMESPACES.NAVIGATION,
+        ACTIONS.NAVIGATION.BACK,
+        { consumed },
+      );
       return toRouterResult(raw, consumed);
     },
 
@@ -61,7 +68,11 @@ function createNavigationRouter(rpc: RpcClient): NavigationRouterSdkModule {
      * history to pop and keeps the container open on the next back press.
      */
     async push(consumed = true): Promise<NavigationRouterResult> {
-      const raw = await rpc.request<unknown>(NAMESPACES.NAVIGATION, ACTIONS.NAVIGATION.PUSH, { consumed });
+      const raw = await rpc.request<unknown>(
+        NAMESPACES.NAVIGATION,
+        ACTIONS.NAVIGATION.PUSH,
+        { consumed },
+      );
       return toRouterResult(raw, consumed);
     },
   };
@@ -69,8 +80,17 @@ function createNavigationRouter(rpc: RpcClient): NavigationRouterSdkModule {
 
 export function createNavigationModule(rpc: RpcClient): NavigationSdkModule {
   return {
-    navigate: (target: NavigationTarget) => rpc.request<void>(NAMESPACES.NAVIGATION, ACTIONS.NAVIGATION.NAVIGATE, target),
-    getCurrent: () => rpc.request<NavigationState>(NAMESPACES.NAVIGATION, ACTIONS.NAVIGATION.GET_CURRENT),
+    navigate: (target: NavigationTarget) =>
+      rpc.request<void>(
+        NAMESPACES.NAVIGATION,
+        ACTIONS.NAVIGATION.NAVIGATE,
+        target,
+      ),
+    getCurrent: () =>
+      rpc.request<NavigationState>(
+        NAMESPACES.NAVIGATION,
+        ACTIONS.NAVIGATION.GET_CURRENT,
+      ),
     router: createNavigationRouter(rpc),
   };
 }
