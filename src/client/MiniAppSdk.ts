@@ -98,7 +98,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly platform: PlatformSdkModule;
   readonly device: DeviceSdkModule;
   readonly http: HttpSdkModule;
-  readonly chat: ChatSdkModule;
+  readonly ai: ChatSdkModule;
   readonly appearance: AppearanceSdkModule;
 
   private readonly rpc: RpcClient;
@@ -158,7 +158,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.device = this.registry.get<DeviceSdkModule>(NAMESPACES.DEVICE)!;
     this.api = this.registry.get<ApiSdkModule>(NAMESPACES.API)!;
     this.http = this.registry.get<HttpSdkModule>(NAMESPACES.HTTP)!;
-    this.chat = this.registry.get<ChatSdkModule>(NAMESPACES.AI)!;
+    this.ai = this.registry.get<ChatSdkModule>(NAMESPACES.AI)!;
 
     const platformHandle = createPlatformModule('web');
     this.platform = platformHandle.module;

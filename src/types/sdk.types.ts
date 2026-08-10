@@ -46,7 +46,7 @@ export interface MiniAppSdkInterface {
   device: DeviceSdkModule;
   api: ApiSdkModule;
   http: HttpSdkModule;
-  chat: ChatSdkModule;
+  ai: ChatSdkModule;
 
   initialize(): Promise<void>;
   destroy(): void;
