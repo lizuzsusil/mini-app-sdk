@@ -41,6 +41,10 @@ export type {
   StorageSdkModule,
 } from '@lizuz/mini-app-types';
 
+export type {ChatMessage, ModelCompletionOptions, StreamChunk, StreamError} from '@lizuz/mini-app-types'
+
+export type { ChatSdkModule } from './chat.types';
+
 export type {
   DevicePermissionStatus,
   DeviceCameraResult,

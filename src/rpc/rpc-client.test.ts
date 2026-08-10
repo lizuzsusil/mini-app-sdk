@@ -307,3 +307,109 @@ describe('RpcClient', () => {
     await expect(promise).rejects.toBeInstanceOf(ProtocolError);
   });
 });
+
+describe('RpcClient stream requests', () => {
+  function streamChunk(requestId: string, traceId: string, data: string, index: number, last = false) {
+    const message = createMessage('stream', NAMESPACES.AI, ACTIONS.AI.CHAT, HOST_TARGET, 'test-mini-app', data, {
+      requestId,
+      traceId,
+    });
+    return Object.assign(message, { streamIndex: index, streamTotal: index + 1, streamLast: last });
+  }
+
+  it('sends a well-formed stream request envelope addressed to the host', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    await client.sendStreamRequest(NAMESPACES.AI, ACTIONS.AI.CHAT, {
+      messages: [{ role: 'user', content: 'Hi' }],
+    });
+
+    const sent = transport.lastSent!;
+    expect(sent.type).toBe('request');
+    expect(sent.namespace).toBe('ai');
+    expect(sent.action).toBe('chat');
+    expect(sent.target).toBe(HOST_TARGET);
+    expect(sent.source).toBe('test-mini-app');
+  });
+
+  it('assembles incoming stream chunks into a completed StreamBuilder', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const builderPromise = client.sendStreamRequest(NAMESPACES.AI, ACTIONS.AI.CHAT);
+    const sent = transport.lastSent!;
+
+    transport.simulateIncoming(streamChunk(sent.requestId, sent.traceId, 'Hello', 0));
+    transport.simulateIncoming(streamChunk(sent.requestId, sent.traceId, ' world', 1));
+    transport.simulateIncoming(streamChunk(sent.requestId, sent.traceId, '!', 2, true));
+
+    const builder = await builderPromise;
+    await expect(builder.waitUntilDone()).resolves.toBeUndefined();
+    expect(builder.isDone).toBe(true);
+
+    const parts: string[] = [];
+    for await (const part of builder.iterate()) parts.push(String(part));
+    expect(parts).toEqual(['Hello', ' world', '!']);
+  });
+
+  it('rejects the stream when the host refuses the request with a response error', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const builderPromise = client.sendStreamRequest(NAMESPACES.AI, ACTIONS.AI.CHAT);
+    const sent = transport.lastSent!;
+
+    transport.simulateIncoming(
+      createMessage('response', sent.namespace, sent.action, HOST_TARGET, 'test-mini-app', undefined, {
+        requestId: sent.requestId,
+        traceId: sent.traceId,
+        error: { code: 'AI_UNAVAILABLE', message: 'no model configured', retryable: false },
+      })
+    );
+
+    const builder = await builderPromise;
+    await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(ProtocolError);
+    await expect(builder.waitUntilDone()).rejects.toMatchObject({ code: 'AI_UNAVAILABLE' });
+  });
+
+  it('rejects the stream when a stream message carries an error', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const builderPromise = client.sendStreamRequest(NAMESPACES.AI, ACTIONS.AI.CHAT);
+    const sent = transport.lastSent!;
+
+    const message = streamChunk(sent.requestId, sent.traceId, 'partial', 0);
+    Object.assign(message, { error: { code: 'STREAM_FAILED', message: 'stream aborted', retryable: true } });
+    transport.simulateIncoming(message);
+
+    const builder = await builderPromise;
+    await expect(builder.waitUntilDone()).rejects.toMatchObject({ code: 'STREAM_FAILED', retryable: true });
+  });
+
+  it('times out when the host never answers', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 10, retryAttempts: 0 });
+    client.start();
+
+    const builder = await client.sendStreamRequest(NAMESPACES.AI, ACTIONS.AI.CHAT);
+    await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(TimeoutError);
+  });
+
+  it('rejects active streams when stopped', async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 5000 });
+    client.start();
+
+    const builder = await client.sendStreamRequest(NAMESPACES.AI, ACTIONS.AI.CHAT);
+    client.stop();
+
+    await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(ProtocolError);
+    expect(builder.isRejected).toBe(true);
+  });
+});

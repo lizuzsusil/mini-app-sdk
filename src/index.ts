@@ -58,7 +58,14 @@ export type {
   MiniAppSdkInterface,
   MiniAppSdkOptions,
   EventHandler,
+  ChatSdkModule,
+  ChatMessage,
+  ModelCompletionOptions,
+  StreamChunk,
+  StreamError,
 } from './types';
+
+export { StreamBuilder } from './stream';
 
 export type {
   Direction,

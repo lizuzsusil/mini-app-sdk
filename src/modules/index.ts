@@ -9,6 +9,7 @@ export type { PlatformModuleHandle, ResolvedPlatformResponse } from './platform.
 export { createDeviceModule } from './device.module';
 export { createApiModule } from './api.module';
 export { createHttpModule } from './http.module';
+export { createChatModule } from './chat.module';
 export {
   createAppearanceModule,
   APPEARANCE_EVENTS,

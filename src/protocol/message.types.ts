@@ -1,7 +1,10 @@
 /**
- * The four message kinds that can travel over the transport.
+ * The message kinds that can travel over the transport. `stream` is the
+ * incremental delivery channel for long-running responses: a single
+ * request is answered by a sequence of `stream` messages, each carrying
+ * one ordered `streamIndex`, with the final one flagged `streamLast: true`.
  */
-export type MessageType = 'request' | 'response' | 'event' | 'handshake';
+export type MessageType = 'request' | 'response' | 'event' | 'handshake' | 'stream';
 
 /**
  * Structured error shape carried inside a `response` message when the host
@@ -34,6 +37,15 @@ export interface PlatformMessage<TPayload = unknown> {
   error?: PlatformError;
   traceId: string;
   timestamp: number;
+
+  /**
+   * Only present on `stream` messages. Zero-based position of this chunk
+   * in the overall response, the total chunk count when the host knows it
+   * up front, and a flag marking the final chunk.
+   */
+  streamIndex?: number;
+  streamTotal?: number;
+  streamLast?: boolean;
 }
 
 /**

@@ -6,6 +6,7 @@ import { MetricsRecorder } from '../observability';
 import type { RpcMetricsSnapshot } from '../observability';
 import { createMessage, hasCompatibleMajorVersion, majorVersionsMatch } from '../protocol';
 import type { HandshakeAckPayload, HandshakePayload, PlatformMessage } from '../protocol';
+import { StreamBuilder } from '../stream';
 import type { Transport } from '../transport';
 import { computeBackoffMs, delay, generateId } from '../utils';
 import { composeMiddleware } from './middleware';
@@ -65,6 +66,7 @@ export class RpcClient {
 
   private readonly pending = new Map<string, PendingRequest>();
   private readonly eventHandlers = new Map<string, Set<EventHandler>>();
+  private readonly streamConsumers = new Map<string, StreamBuilder>();
   private readonly middlewares: RpcMiddleware[] = [];
   private readonly metricsRecorder = new MetricsRecorder();
   private readonly traceId: string;
@@ -116,6 +118,16 @@ export class RpcClient {
       );
       this.pending.delete(id);
     }
+
+    for (const [, stream] of this.streamConsumers) {
+      stream.rejectChunk(
+        new ProtocolError({
+          reason: 'malformed-message',
+          message: 'The stream was cancelled because the RPC client was stopped',
+        })
+      );
+    }
+    this.streamConsumers.clear();
 
     this.eventHandlers.clear();
   }
@@ -218,6 +230,53 @@ export class RpcClient {
     }
 
     throw lastError ?? new ProtocolError({ reason: 'malformed-message', message: `Request "${namespace}.${action}" failed for an unknown reason` });
+  }
+
+  /**
+   * Sends a request whose response the host streams back as a sequence of
+   * `stream` messages. Resolves with a `StreamBuilder` immediately — the
+   * first chunk may arrive before this promise settles — which callers
+   * consume via `builder.iterate()` (per-chunk) or `builder.waitUntilDone()`
+   * (whole-stream completion). See `stream/StreamBuilder.ts`.
+   *
+   * Streams deliberately bypass the middleware and retry machinery: a
+   * stream may already have produced output by the time a failure would be
+   * detected, so an automatic retry can't be spliced in safely. A timeout
+   * still applies, matching every other request.
+   */
+  async sendStreamRequest(namespace: string, action: string, payload?: unknown): Promise<StreamBuilder> {
+    const message = createMessage('request', namespace, action, this.miniAppId, HOST_TARGET, payload, {
+      traceId: this.traceId,
+    });
+
+    const builder = new StreamBuilder();
+    this.streamConsumers.set(message.requestId, builder);
+
+    const timer = setTimeout(() => {
+      this.streamConsumers.delete(message.requestId);
+      builder.rejectChunk(new TimeoutError({ namespace, action, timeoutMs: this.timeout }));
+    }, this.timeout);
+
+    try {
+      this.transport.send(message);
+    } catch (error) {
+      clearTimeout(timer);
+      this.streamConsumers.delete(message.requestId);
+      builder.rejectChunk(error instanceof Error ? error : new Error(String(error)));
+    }
+
+    builder.waitUntilDone().then(
+      () => {
+        clearTimeout(timer);
+        this.streamConsumers.delete(message.requestId);
+      },
+      () => {
+        clearTimeout(timer);
+        this.streamConsumers.delete(message.requestId);
+      },
+    );
+
+    return builder;
   }
 
   /**
@@ -352,7 +411,16 @@ export class RpcClient {
 
     if (message.type === 'response' || message.type === 'handshake') {
       const pending = this.pending.get(message.requestId);
-      if (!pending) return;
+      if (!pending) {
+        // A streamed request is normally answered entirely with `stream`
+        // messages, but a host that refuses it up front may answer with a
+        // plain `response` carrying an error. Surface that to the stream.
+        const stream = this.streamConsumers.get(message.requestId);
+        if (stream && message.error) {
+          stream.rejectChunk(new ProtocolError({ reason: 'host-rejected', platformError: message.error }));
+        }
+        return;
+      }
 
       clearTimeout(pending.timer);
       this.pending.delete(message.requestId);
@@ -362,6 +430,28 @@ export class RpcClient {
       } else {
         pending.resolve(message.payload);
       }
+      return;
+    }
+
+    if (message.type === 'stream') {
+      const stream = this.streamConsumers.get(message.requestId);
+      if (!stream) return;
+
+      if (message.error) {
+        stream.rejectChunk(new ProtocolError({ reason: 'host-rejected', platformError: message.error }));
+        return;
+      }
+
+      const data =
+        typeof message.payload === 'string' || message.payload instanceof Uint8Array
+          ? message.payload
+          : '';
+      stream.addChunk({
+        data,
+        index: message.streamIndex ?? 0,
+        total: message.streamTotal,
+        last: message.streamLast ?? false,
+      });
       return;
     }
 

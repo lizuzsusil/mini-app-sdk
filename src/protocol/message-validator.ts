@@ -1,7 +1,7 @@
 import { PROTOCOL_VERSION } from '../constants';
 import type { PlatformError, PlatformMessage } from './message.types';
 
-const MESSAGE_TYPES = new Set(['request', 'response', 'event', 'handshake']);
+const MESSAGE_TYPES = new Set(['request', 'response', 'event', 'handshake', 'stream']);
 
 export interface MessageValidationResult {
   valid: boolean;
@@ -93,6 +93,18 @@ export function validatePlatformMessage(data: unknown): MessageValidationResult 
 
   if (data.error !== undefined && !isValidPlatformError(data.error)) {
     return { valid: false, reason: 'invalid "error" shape' };
+  }
+
+  if (data.type === 'stream') {
+    if (data.streamIndex !== undefined && (typeof data.streamIndex !== 'number' || !Number.isFinite(data.streamIndex))) {
+      return { valid: false, reason: 'invalid "streamIndex" on stream message' };
+    }
+    if (data.streamTotal !== undefined && (typeof data.streamTotal !== 'number' || !Number.isFinite(data.streamTotal))) {
+      return { valid: false, reason: 'invalid "streamTotal" on stream message' };
+    }
+    if (data.streamLast !== undefined && typeof data.streamLast !== 'boolean') {
+      return { valid: false, reason: 'invalid "streamLast" on stream message' };
+    }
   }
 
   return { valid: true };

@@ -14,6 +14,7 @@ import type {
 } from '@lizuz/mini-app-types';
 import type { RpcClient, RpcMiddleware } from '../rpc';
 import type { RpcMetricsSnapshot } from '../observability';
+import type { ChatSdkModule } from './chat.types';
 
 /**
  * The full public shape of a `MiniAppSdk` instance — this is the contract
@@ -45,6 +46,7 @@ export interface MiniAppSdkInterface {
   device: DeviceSdkModule;
   api: ApiSdkModule;
   http: HttpSdkModule;
+  chat: ChatSdkModule;
 
   initialize(): Promise<void>;
   destroy(): void;

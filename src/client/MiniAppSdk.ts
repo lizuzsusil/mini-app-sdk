@@ -13,6 +13,7 @@ import {
   createFlagsModule,
   createNavigationModule,
   createHttpModule,
+  createChatModule,
   createPermissionsModule,
   createPlatformModule,
   createStorageModule,
@@ -42,6 +43,7 @@ import type {
   PlatformTypeLiteral,
   HttpSdkModule,
   StorageSdkModule,
+  ChatSdkModule,
 } from '../types';
 
 /**
@@ -96,6 +98,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly platform: PlatformSdkModule;
   readonly device: DeviceSdkModule;
   readonly http: HttpSdkModule;
+  readonly chat: ChatSdkModule;
   readonly appearance: AppearanceSdkModule;
 
   private readonly rpc: RpcClient;
@@ -143,6 +146,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.register(NAMESPACES.DEVICE, createDeviceModule);
     this.registry.register(NAMESPACES.API, createApiModule);
     this.registry.register(NAMESPACES.HTTP, createHttpModule);
+    this.registry.register(NAMESPACES.AI, createChatModule);
     this.registry.build(this.rpc);
 
     this.auth = this.registry.get<AuthSdkModule>(NAMESPACES.AUTH)!;
@@ -154,6 +158,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.device = this.registry.get<DeviceSdkModule>(NAMESPACES.DEVICE)!;
     this.api = this.registry.get<ApiSdkModule>(NAMESPACES.API)!;
     this.http = this.registry.get<HttpSdkModule>(NAMESPACES.HTTP)!;
+    this.chat = this.registry.get<ChatSdkModule>(NAMESPACES.AI)!;
 
     const platformHandle = createPlatformModule('web');
     this.platform = platformHandle.module;
