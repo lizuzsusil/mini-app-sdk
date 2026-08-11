@@ -1,16 +1,30 @@
-import { ACTIONS, HOST_TARGET, NAMESPACES, PROTOCOL_VERSION, SDK_CAPABILITIES } from '../constants';
-import { HandshakeError, ProtocolError, TimeoutError } from '../errors';
-import type { Logger } from '../logging';
-import { noopLogger } from '../logging';
-import { MetricsRecorder } from '../observability';
-import type { RpcMetricsSnapshot } from '../observability';
-import { createMessage, hasCompatibleMajorVersion, majorVersionsMatch } from '../protocol';
-import type { HandshakeAckPayload, HandshakePayload, PlatformMessage } from '../protocol';
-import { StreamBuilder } from '../stream';
-import type { Transport } from '../transport';
-import { computeBackoffMs, delay, generateId } from '../utils';
-import { composeMiddleware } from './middleware';
-import type { RpcMiddleware } from './middleware';
+import {
+  ACTIONS,
+  HOST_TARGET,
+  NAMESPACES,
+  PROTOCOL_VERSION,
+  SDK_CAPABILITIES,
+} from "../constants";
+import { HandshakeError, ProtocolError, TimeoutError } from "../errors";
+import type { Logger } from "../logging";
+import { noopLogger } from "../logging";
+import type { RpcMetricsSnapshot } from "../observability";
+import { MetricsRecorder } from "../observability";
+import type {
+  HandshakeAckPayload,
+  HandshakePayload,
+  PlatformMessage,
+} from "../protocol";
+import {
+  createMessage,
+  hasCompatibleMajorVersion,
+  majorVersionsMatch,
+} from "../protocol";
+import { StreamBuilder } from "../stream";
+import type { Transport } from "../transport";
+import { computeBackoffMs, delay, generateId } from "../utils";
+import type { RpcMiddleware } from "./middleware";
+import { composeMiddleware } from "./middleware";
 
 export type EventHandler<TPayload = unknown> = (payload: TPayload) => void;
 
@@ -42,7 +56,7 @@ const DEFAULT_MAX_RETRY_DELAY_MS = 8_000;
  * version are conceptually different axes, even though they share a value
  * in this release.
  */
-const RPC_CLIENT_SDK_VERSION = '3.0.0';
+const RPC_CLIENT_SDK_VERSION = "3.0.0";
 
 /**
  * Owns everything about *RPC semantics* as opposed to *message delivery*:
@@ -88,7 +102,8 @@ export class RpcClient {
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
     this.retryAttempts = options.retryAttempts ?? DEFAULT_RETRY_ATTEMPTS;
     this.retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
-    this.maxRetryDelayMs = options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS;
+    this.maxRetryDelayMs =
+      options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS;
     this.logger = options.logger ?? noopLogger;
     this.traceId = generateId();
   }
@@ -112,9 +127,9 @@ export class RpcClient {
       clearTimeout(request.timer);
       request.reject(
         new ProtocolError({
-          reason: 'malformed-message',
+          reason: "malformed-message",
           message: `Request "${request.namespace}.${request.action}" was cancelled because the RPC client was stopped`,
-        })
+        }),
       );
       this.pending.delete(id);
     }
@@ -122,9 +137,10 @@ export class RpcClient {
     for (const [, stream] of this.streamConsumers) {
       stream.rejectChunk(
         new ProtocolError({
-          reason: 'malformed-message',
-          message: 'The stream was cancelled because the RPC client was stopped',
-        })
+          reason: "malformed-message",
+          message:
+            "The stream was cancelled because the RPC client was stopped",
+        }),
       );
     }
     this.streamConsumers.clear();
@@ -153,19 +169,38 @@ export class RpcClient {
       capabilities: SDK_CAPABILITIES,
     };
 
-    const message = createMessage('handshake', NAMESPACES.HANDSHAKE, ACTIONS.HANDSHAKE.CONNECT, this.miniAppId, HOST_TARGET, payload, {
-      traceId: this.traceId,
-    });
+    const message = createMessage(
+      "handshake",
+      NAMESPACES.HANDSHAKE,
+      ACTIONS.HANDSHAKE.CONNECT,
+      this.miniAppId,
+      HOST_TARGET,
+      payload,
+      {
+        traceId: this.traceId,
+      },
+    );
 
     return new Promise<void>((resolvePromise, rejectPromise) => {
       const timer = setTimeout(() => {
         this.pending.delete(message.requestId);
-        rejectPromise(new HandshakeError({ message: 'Handshake with host timed out', timedOut: true }));
+        rejectPromise(
+          new HandshakeError({
+            message: "Handshake with host timed out",
+            timedOut: true,
+          }),
+        );
       }, this.timeout);
 
       this.pending.set(message.requestId, {
-        resolve: (ackPayload) => this.completeHandshake(ackPayload, resolvePromise, rejectPromise),
-        reject: (error) => rejectPromise(error instanceof HandshakeError ? error : new HandshakeError({ message: error.message, cause: error })),
+        resolve: (ackPayload) =>
+          this.completeHandshake(ackPayload, resolvePromise, rejectPromise),
+        reject: (error) =>
+          rejectPromise(
+            error instanceof HandshakeError
+              ? error
+              : new HandshakeError({ message: error.message, cause: error }),
+          ),
         timer,
         namespace: NAMESPACES.HANDSHAKE,
         action: ACTIONS.HANDSHAKE.CONNECT,
@@ -192,9 +227,15 @@ export class RpcClient {
    * through any registered middleware, then through the retry loop
    * described on `executeWithRetry`.
    */
-  async request<T>(namespace: string, action: string, payload?: unknown): Promise<T> {
-    return composeMiddleware<T>(this.middlewares, { namespace, action, payload, attempt: 0 }, () =>
-      this.executeWithRetry<T>(namespace, action, payload)
+  async request<T>(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+  ): Promise<T> {
+    return composeMiddleware<T>(
+      this.middlewares,
+      { namespace, action, payload, attempt: 0 },
+      () => this.executeWithRetry<T>(namespace, action, payload),
     );
   }
 
@@ -206,30 +247,54 @@ export class RpcClient {
    * host hiccup doesn't retry in lockstep. Every attempt — success or
    * failure — is recorded into `metricsRecorder`.
    */
-  private async executeWithRetry<T>(namespace: string, action: string, payload?: unknown): Promise<T> {
+  private async executeWithRetry<T>(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+  ): Promise<T> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= this.retryAttempts; attempt++) {
       const startedAt = Date.now();
       try {
         const result = await this.sendRequest<T>(namespace, action, payload);
-        this.metricsRecorder.recordSuccess(namespace, action, Date.now() - startedAt);
+        this.metricsRecorder.recordSuccess(
+          namespace,
+          action,
+          Date.now() - startedAt,
+        );
         return result;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         const wasTimeout = lastError instanceof TimeoutError;
-        this.metricsRecorder.recordFailure(namespace, action, Date.now() - startedAt, wasTimeout);
+        this.metricsRecorder.recordFailure(
+          namespace,
+          action,
+          Date.now() - startedAt,
+          wasTimeout,
+        );
 
-        const retryable = 'retryable' in lastError ? Boolean((lastError as { retryable?: boolean }).retryable) : false;
+        const retryable =
+          "retryable" in lastError
+            ? Boolean((lastError as { retryable?: boolean }).retryable)
+            : false;
         if (!retryable) throw lastError;
         if (attempt < this.retryAttempts) {
           this.metricsRecorder.recordRetry(namespace, action);
-          await delay(computeBackoffMs(attempt, this.retryDelayMs, this.maxRetryDelayMs));
+          await delay(
+            computeBackoffMs(attempt, this.retryDelayMs, this.maxRetryDelayMs),
+          );
         }
       }
     }
 
-    throw lastError ?? new ProtocolError({ reason: 'malformed-message', message: `Request "${namespace}.${action}" failed for an unknown reason` });
+    throw (
+      lastError ??
+      new ProtocolError({
+        reason: "malformed-message",
+        message: `Request "${namespace}.${action}" failed for an unknown reason`,
+      })
+    );
   }
 
   /**
@@ -244,17 +309,31 @@ export class RpcClient {
    * detected, so an automatic retry can't be spliced in safely. A timeout
    * still applies, matching every other request.
    */
-  async sendStreamRequest(namespace: string, action: string, payload?: unknown): Promise<StreamBuilder> {
-    const message = createMessage('request', namespace, action, this.miniAppId, HOST_TARGET, payload, {
-      traceId: this.traceId,
-    });
+  async sendStreamRequest(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+  ): Promise<StreamBuilder> {
+    const message = createMessage(
+      "request",
+      namespace,
+      action,
+      this.miniAppId,
+      HOST_TARGET,
+      payload,
+      {
+        traceId: this.traceId,
+      },
+    );
 
     const builder = new StreamBuilder();
     this.streamConsumers.set(message.requestId, builder);
 
     const timer = setTimeout(() => {
       this.streamConsumers.delete(message.requestId);
-      builder.rejectChunk(new TimeoutError({ namespace, action, timeoutMs: this.timeout }));
+      builder.rejectChunk(
+        new TimeoutError({ namespace, action, timeoutMs: this.timeout }),
+      );
     }, this.timeout);
 
     try {
@@ -262,7 +341,9 @@ export class RpcClient {
     } catch (error) {
       clearTimeout(timer);
       this.streamConsumers.delete(message.requestId);
-      builder.rejectChunk(error instanceof Error ? error : new Error(String(error)));
+      builder.rejectChunk(
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
 
     builder.waitUntilDone().then(
@@ -289,18 +370,23 @@ export class RpcClient {
    * fire-and-forget: a host that doesn't require explicit subscription
    * simply ignores it.
    */
-  onEvent<TPayload = unknown>(event: string, handler: EventHandler<TPayload>): () => void {
+  onEvent<TPayload = unknown>(
+    event: string,
+    handler: EventHandler<TPayload>,
+  ): () => void {
     const isFirstHandlerForEvent = !this.eventHandlers.has(event);
     if (isFirstHandlerForEvent) {
       this.eventHandlers.set(event, new Set());
-      this.request(NAMESPACES.EVENT, ACTIONS.EVENT.SUBSCRIBE, { eventType: event }).catch((error: unknown) => {
+      this.request(NAMESPACES.EVENT, ACTIONS.EVENT.SUBSCRIBE, {
+        eventType: event,
+      }).catch((error: unknown) => {
         this.logger.warn(`Failed to subscribe to event "${event}"`, {
           error: error instanceof Error ? error.message : String(error),
         });
       });
     }
 
-    this.eventHandlers.get(event)!.add(handler as EventHandler);
+    this.eventHandlers.get(event)?.add(handler as EventHandler);
     return () => {
       this.eventHandlers.get(event)?.delete(handler as EventHandler);
     };
@@ -329,45 +415,79 @@ export class RpcClient {
     return this.metricsRecorder.snapshot();
   }
 
-  private completeHandshake(ackPayload: unknown, resolvePromise: () => void, rejectPromise: (error: Error) => void): void {
-    const ack = (ackPayload && typeof ackPayload === 'object' ? ackPayload : {}) as HandshakeAckPayload;
+  private completeHandshake(
+    ackPayload: unknown,
+    resolvePromise: () => void,
+    rejectPromise: (error: Error) => void,
+  ): void {
+    const ack = (
+      ackPayload && typeof ackPayload === "object" ? ackPayload : {}
+    ) as HandshakeAckPayload;
 
-    if (ack.status === 'rejected') {
-      rejectPromise(new HandshakeError({ message: ack.reason ?? 'Host rejected the handshake request' }));
+    if (ack.status === "rejected") {
+      rejectPromise(
+        new HandshakeError({
+          message: ack.reason ?? "Host rejected the handshake request",
+        }),
+      );
       return;
     }
 
-    if (ack.protocolVersion && !majorVersionsMatch(ack.protocolVersion, PROTOCOL_VERSION)) {
+    if (
+      ack.protocolVersion &&
+      !majorVersionsMatch(ack.protocolVersion, PROTOCOL_VERSION)
+    ) {
       rejectPromise(
         new HandshakeError({
           message: `Host protocol version "${ack.protocolVersion}" is incompatible with this SDK's protocol version "${PROTOCOL_VERSION}" (major version mismatch)`,
-        })
+        }),
       );
       return;
     }
 
     if (ack.capabilities) {
-      this.negotiatedCapabilities = SDK_CAPABILITIES.filter((capability) => ack.capabilities!.includes(capability));
-      this.logger.debug('Negotiated capabilities with host', { capabilities: this.negotiatedCapabilities });
+      this.negotiatedCapabilities = SDK_CAPABILITIES.filter((capability) =>
+        ack.capabilities?.includes(capability),
+      );
+      this.logger.debug("Negotiated capabilities with host", {
+        capabilities: this.negotiatedCapabilities,
+      });
     } else {
       this.negotiatedCapabilities = [...SDK_CAPABILITIES];
-      this.logger.debug('Host did not report capabilities during handshake; assuming full support', {
-        assumed: this.negotiatedCapabilities,
-      });
+      this.logger.debug(
+        "Host did not report capabilities during handshake; assuming full support",
+        {
+          assumed: this.negotiatedCapabilities,
+        },
+      );
     }
 
     resolvePromise();
   }
 
-  private sendRequest<T>(namespace: string, action: string, payload?: unknown): Promise<T> {
-    const message = createMessage('request', namespace, action, this.miniAppId, HOST_TARGET, payload, {
-      traceId: this.traceId,
-    });
+  private sendRequest<T>(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+  ): Promise<T> {
+    const message = createMessage(
+      "request",
+      namespace,
+      action,
+      this.miniAppId,
+      HOST_TARGET,
+      payload,
+      {
+        traceId: this.traceId,
+      },
+    );
 
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(message.requestId);
-        reject(new TimeoutError({ namespace, action, timeoutMs: this.timeout }));
+        reject(
+          new TimeoutError({ namespace, action, timeoutMs: this.timeout }),
+        );
       }, this.timeout);
 
       this.pending.set(message.requestId, {
@@ -397,19 +517,22 @@ export class RpcClient {
   }
 
   private handleIncomingMessage(message: PlatformMessage): void {
-    if (message.target !== this.miniAppId && message.target !== '*') return;
+    if (message.target !== this.miniAppId && message.target !== "*") return;
 
     if (!hasCompatibleMajorVersion(message)) {
-      this.logger.warn('Dropped message with an incompatible protocol major version', {
-        received: message.gsaProtocolVersion,
-        expected: PROTOCOL_VERSION,
-        namespace: message.namespace,
-        action: message.action,
-      });
+      this.logger.warn(
+        "Dropped message with an incompatible protocol major version",
+        {
+          received: message.gsaProtocolVersion,
+          expected: PROTOCOL_VERSION,
+          namespace: message.namespace,
+          action: message.action,
+        },
+      );
       return;
     }
 
-    if (message.type === 'response' || message.type === 'handshake') {
+    if (message.type === "response" || message.type === "handshake") {
       const pending = this.pending.get(message.requestId);
       if (!pending) {
         // A streamed request is normally answered entirely with `stream`
@@ -417,7 +540,12 @@ export class RpcClient {
         // plain `response` carrying an error. Surface that to the stream.
         const stream = this.streamConsumers.get(message.requestId);
         if (stream && message.error) {
-          stream.rejectChunk(new ProtocolError({ reason: 'host-rejected', platformError: message.error }));
+          stream.rejectChunk(
+            new ProtocolError({
+              reason: "host-rejected",
+              platformError: message.error,
+            }),
+          );
         }
         return;
       }
@@ -426,26 +554,37 @@ export class RpcClient {
       this.pending.delete(message.requestId);
 
       if (message.error) {
-        pending.reject(new ProtocolError({ reason: 'host-rejected', platformError: message.error }));
+        pending.reject(
+          new ProtocolError({
+            reason: "host-rejected",
+            platformError: message.error,
+          }),
+        );
       } else {
         pending.resolve(message.payload);
       }
       return;
     }
 
-    if (message.type === 'stream') {
+    if (message.type === "stream") {
       const stream = this.streamConsumers.get(message.requestId);
       if (!stream) return;
 
       if (message.error) {
-        stream.rejectChunk(new ProtocolError({ reason: 'host-rejected', platformError: message.error }));
+        stream.rejectChunk(
+          new ProtocolError({
+            reason: "host-rejected",
+            platformError: message.error,
+          }),
+        );
         return;
       }
 
       const data =
-        typeof message.payload === 'string' || message.payload instanceof Uint8Array
+        typeof message.payload === "string" ||
+        message.payload instanceof Uint8Array
           ? message.payload
-          : '';
+          : "";
       stream.addChunk({
         data,
         index: message.streamIndex ?? 0,
@@ -455,10 +594,12 @@ export class RpcClient {
       return;
     }
 
-    if (message.type === 'event') {
+    if (message.type === "event") {
       const key = `${message.namespace}.${message.action}`;
       const handlers = this.eventHandlers.get(key);
-      handlers?.forEach((handler) => handler(message.payload));
+      handlers?.forEach((handler) => {
+        handler(message.payload);
+      });
     }
   }
 }

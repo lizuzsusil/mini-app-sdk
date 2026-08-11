@@ -1,23 +1,35 @@
-import { ACTIONS, NAMESPACES } from '../constants';
-import type { RpcClient } from '../rpc';
+import { ACTIONS, NAMESPACES } from "../constants";
+import type { RpcClient } from "../rpc";
 import type {
-  AppearanceState,
   AppearanceSdkModule,
+  AppearanceState,
   Direction,
   LocaleState,
   ThemeMode,
   ThemePreference,
   ThemeState,
-} from '../types';
-import type { AppearanceType } from '../types/common.types';
+} from "../types";
+import type { AppearanceType } from "../types/common.types";
 
 const DEFAULT_STATE: AppearanceState = {
-  locale: { locale: 'en', language: 'en', direction: 'ltr' },
-  theme: { preference: 'system', mode: 'light' },
+  locale: { locale: "en", language: "en", direction: "ltr" },
+  theme: { preference: "system", mode: "light" },
 };
 
 /** Language subtags written right-to-left, used to derive `direction` from a bare locale string. */
-const RTL_LANGUAGES = new Set(['ar', 'he', 'fa', 'ur', 'ps', 'sd', 'ug', 'yi', 'dv', 'ku', 'nqo']);
+const RTL_LANGUAGES = new Set([
+  "ar",
+  "he",
+  "fa",
+  "ur",
+  "ps",
+  "sd",
+  "ug",
+  "yi",
+  "dv",
+  "ku",
+  "nqo",
+]);
 
 /**
  * Resolves `system` into a concrete mode. The Flutter shell sends only a
@@ -25,9 +37,14 @@ const RTL_LANGUAGES = new Set(['ar', 'he', 'fa', 'ur', 'ps', 'sd', 'ug', 'yi', '
  * absent in the WebView tests and in SSR, hence the fallback.
  */
 function resolveSystemMode(fallback: ThemeMode): ThemeMode {
-  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function"
+  ) {
     try {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
     } catch {
       return fallback;
     }
@@ -37,10 +54,10 @@ function resolveSystemMode(fallback: ThemeMode): ThemeMode {
 
 /** Expands a locale tag (`en`, `en-LK`, `ar_SA`) into a full `LocaleState`. */
 function localeFromTag(tag: string): LocaleState | null {
-  const normalized = tag.trim().replace(/_/g, '-');
+  const normalized = tag.trim().replace(/_/g, "-");
   if (!normalized) return null;
 
-  const [languageRaw = '', regionRaw] = normalized.split('-');
+  const [languageRaw = "", regionRaw] = normalized.split("-");
   const language = languageRaw.toLowerCase();
   if (!language) return null;
 
@@ -48,7 +65,7 @@ function localeFromTag(tag: string): LocaleState | null {
   const locale: LocaleState = {
     locale: region ? `${language}-${region}` : language,
     language,
-    direction: RTL_LANGUAGES.has(language) ? 'rtl' : 'ltr',
+    direction: RTL_LANGUAGES.has(language) ? "rtl" : "ltr",
   };
   if (region) locale.region = region;
   return locale;
@@ -67,22 +84,22 @@ function localeFromTag(tag: string): LocaleState | null {
  * language subtag when the host didn't say.
  */
 export function normalizeLocale(input: unknown): LocaleState | null {
-  if (typeof input === 'string') return localeFromTag(input);
-  if (!input || typeof input !== 'object') return null;
+  if (typeof input === "string") return localeFromTag(input);
+  if (!input || typeof input !== "object") return null;
 
   const candidate = input as Partial<LocaleState> & { locale?: unknown };
 
   // `LocaleState.locale` is a string; an object there means a `{ locale: … }`
   // wrapper, so unwrap one level and re-enter.
-  if (candidate.locale && typeof candidate.locale === 'object') {
+  if (candidate.locale && typeof candidate.locale === "object") {
     return normalizeLocale(candidate.locale);
   }
 
   const tag =
-    typeof candidate.locale === 'string' && candidate.locale
+    typeof candidate.locale === "string" && candidate.locale
       ? candidate.locale
       : candidate.language;
-  if (typeof tag !== 'string') return null;
+  if (typeof tag !== "string") return null;
 
   const derived = localeFromTag(tag);
   if (!derived) return null;
@@ -90,7 +107,7 @@ export function normalizeLocale(input: unknown): LocaleState | null {
   const language = candidate.language ?? derived.language;
   const region = candidate.region ?? derived.region;
   const direction: Direction =
-    candidate.direction === 'rtl' || candidate.direction === 'ltr'
+    candidate.direction === "rtl" || candidate.direction === "ltr"
       ? candidate.direction
       : derived.direction;
 
@@ -108,18 +125,23 @@ export function normalizeLocale(input: unknown): LocaleState | null {
  * resolved to a concrete mode when the host didn't already resolve it.
  * Returns `null` for anything unusable.
  */
-export function normalizeTheme(input: unknown, fallbackMode: ThemeMode = 'light'): ThemeState | null {
-  if (typeof input === 'string') {
+export function normalizeTheme(
+  input: unknown,
+  fallbackMode: ThemeMode = "light",
+): ThemeState | null {
+  if (typeof input === "string") {
     const value = input.trim().toLowerCase();
-    if (value !== 'dark' && value !== 'light' && value !== 'system') return null;
+    if (value !== "dark" && value !== "light" && value !== "system")
+      return null;
     const preference = value as ThemePreference;
     return {
       preference,
-      mode: preference === 'system' ? resolveSystemMode(fallbackMode) : preference,
+      mode:
+        preference === "system" ? resolveSystemMode(fallbackMode) : preference,
     };
   }
 
-  if (!input || typeof input !== 'object') return null;
+  if (!input || typeof input !== "object") return null;
   const candidate = input as Partial<ThemeState> & { theme?: unknown };
 
   // A `{ theme: … }` wrapper — `ThemeState` itself has no `theme` field.
@@ -133,14 +155,16 @@ export function normalizeTheme(input: unknown, fallbackMode: ThemeMode = 'light'
   // A host-resolved mode is authoritative — only fall back to our own
   // resolution when it didn't send one.
   const mode: ThemeMode =
-    candidate.mode === 'dark' || candidate.mode === 'light' ? candidate.mode : base.mode;
+    candidate.mode === "dark" || candidate.mode === "light"
+      ? candidate.mode
+      : base.mode;
   return { preference: base.preference, mode };
 }
 
 /** Event names published by the host (mirror of host `PLATFORM_EVENTS`). */
 export const APPEARANCE_EVENTS = {
-  LOCALE_CHANGED: 'appearance.locale.changed',
-  THEME_CHANGED: 'appearance.theme.changed',
+  LOCALE_CHANGED: "appearance.locale.changed",
+  THEME_CHANGED: "appearance.theme.changed",
 } as const;
 
 /**
@@ -183,21 +207,23 @@ export function createAppearanceModule(rpc: RpcClient): AppearanceModuleHandle {
       } catch (error) {
         // A subscriber must not break the notification loop.
         // eslint-disable-next-line no-console
-        console.error('[appearance] listener error:', error);
+        console.error("[appearance] listener error:", error);
       }
     }
   };
 
   const setLocale = (locale: LocaleState): void => {
     const prev = state.locale;
-    if (locale.locale === prev.locale && locale.direction === prev.direction) return;
+    if (locale.locale === prev.locale && locale.direction === prev.direction)
+      return;
     state = { ...state, locale: { ...locale } };
     notify();
   };
 
   const setTheme = (theme: ThemeState): void => {
     const prev = state.theme;
-    if (theme.preference === prev.preference && theme.mode === prev.mode) return;
+    if (theme.preference === prev.preference && theme.mode === prev.mode)
+      return;
     state = { ...state, theme: { ...theme } };
     notify();
   };

@@ -1,6 +1,6 @@
-import { ACTIONS, NAMESPACES } from '../constants';
-import type { RpcClient } from '../rpc';
-import type { ChatSdkModule } from '../types';
+import { ACTIONS, NAMESPACES } from "../constants";
+import type { RpcClient } from "../rpc";
+import type { ChatSdkModule } from "../types";
 
 /**
  * The AI/chat module. Streams a model completion from the host over the
@@ -12,7 +12,10 @@ import type { ChatSdkModule } from '../types';
 export function createChatModule(rpc: RpcClient): ChatSdkModule {
   return {
     chat(messages, options) {
-      return rpc.sendStreamRequest(NAMESPACES.AI, ACTIONS.AI.CHAT, { messages, options });
+      return rpc.sendStreamRequest(NAMESPACES.AI, ACTIONS.AI.CHAT, {
+        messages,
+        options,
+      });
     },
   };
 }

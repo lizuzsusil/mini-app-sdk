@@ -1,10 +1,10 @@
-import type { LocaleState, ThemeState } from '@lizuz/mini-app-types';
+import type { LocaleState, ThemeState } from "@lizuz/mini-app-types";
 
 /** Generic event handler signature used by `MiniAppSdk.on()`. */
 export type EventHandler<TPayload = unknown> = (payload: TPayload) => void;
 
 /** The host shell the SDK is running inside: Flutter (mobile WebView) or web (Next.js). */
-export type PlatformTypeLiteral = 'flutter' | 'web';
+export type PlatformTypeLiteral = "flutter" | "web";
 
 /** Alias kept for hosts/consumers that spell the platform union as `PlatformTypes`. */
 export type PlatformTypes = PlatformTypeLiteral;

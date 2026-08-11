@@ -4,7 +4,12 @@
  * request is answered by a sequence of `stream` messages, each carrying
  * one ordered `streamIndex`, with the final one flagged `streamLast: true`.
  */
-export type MessageType = 'request' | 'response' | 'event' | 'handshake' | 'stream';
+export type MessageType =
+  | "request"
+  | "response"
+  | "event"
+  | "handshake"
+  | "stream";
 
 /**
  * Structured error shape carried inside a `response` message when the host
@@ -69,7 +74,7 @@ export interface HandshakePayload {
  * host actually reports something to react to.
  */
 export interface HandshakeAckPayload {
-  status?: 'ok' | 'rejected';
+  status?: "ok" | "rejected";
   reason?: string;
   protocolVersion?: string;
   capabilities?: string[];

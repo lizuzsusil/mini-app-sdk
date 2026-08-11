@@ -4,20 +4,20 @@
  * silently-broken runtime string.
  */
 export const NAMESPACES = {
-  AUTH: 'auth',
-  PERMISSIONS: 'permissions',
-  FLAGS: 'flags',
-  CONFIG: 'config',
-  NAVIGATION: 'navigation',
-  PLATFORM: 'platform',
-  DEVICE: 'device',
-  API: 'api',
-  STORAGE: 'storage',
-  HTTP: 'http',
-  APPEARANCE: 'appearance',
-  AI: 'ai',
-  EVENT: 'event',
-  HANDSHAKE: 'handshake',
+  AUTH: "auth",
+  PERMISSIONS: "permissions",
+  FLAGS: "flags",
+  CONFIG: "config",
+  NAVIGATION: "navigation",
+  PLATFORM: "platform",
+  DEVICE: "device",
+  API: "api",
+  STORAGE: "storage",
+  HTTP: "http",
+  APPEARANCE: "appearance",
+  AI: "ai",
+  EVENT: "event",
+  HANDSHAKE: "handshake",
 } as const;
 
 export type Namespace = (typeof NAMESPACES)[keyof typeof NAMESPACES];
@@ -50,72 +50,72 @@ export const SDK_CAPABILITIES: string[] = [
  */
 export const ACTIONS = {
   AUTH: {
-    GET_USER: 'getUser',
-    IS_AUTHENTICATED: 'isAuthenticated',
-    LOGOUT: 'logout',
+    GET_USER: "getUser",
+    IS_AUTHENTICATED: "isAuthenticated",
+    LOGOUT: "logout",
   },
   PERMISSIONS: {
-    HAS: 'has',
-    LIST: 'list',
+    HAS: "has",
+    LIST: "list",
   },
   FLAGS: {
-    IS_ENABLED: 'isEnabled',
-    GET_ALL: 'getAll',
+    IS_ENABLED: "isEnabled",
+    GET_ALL: "getAll",
   },
   CONFIG: {
-    GET: 'get',
-    GET_ALL: 'getAll',
+    GET: "get",
+    GET_ALL: "getAll",
   },
   NAVIGATION: {
-    NAVIGATE: 'navigate',
-    GET_CURRENT: 'getCurrent',
-    BACK: 'back',
-    PUSH: 'push',
+    NAVIGATE: "navigate",
+    GET_CURRENT: "getCurrent",
+    BACK: "back",
+    PUSH: "push",
   },
   PLATFORM: {
-    GET_TYPE: 'getType',
+    GET_TYPE: "getType",
   },
   DEVICE: {
-    LOCATION: 'location',
-    CAMERA: 'camera',
-    GALLERY: 'gallery',
-    FILES: 'files',
-    DOWNLOAD: 'download',
-    CONTACT: 'contact',
-    BIOMETRIC: 'biometric',
-    NOTIFICATIONS: 'notifications',
-    NETWORK: 'network',
-    INFO: 'info',
+    LOCATION: "location",
+    CAMERA: "camera",
+    GALLERY: "gallery",
+    FILES: "files",
+    DOWNLOAD: "download",
+    CONTACT: "contact",
+    BIOMETRIC: "biometric",
+    NOTIFICATIONS: "notifications",
+    NETWORK: "network",
+    INFO: "info",
   },
   HTTP: {
-    GET: 'get',
-    POST: 'post',
-    PUT: 'put',
-    PATCH: 'patch',
-    DELETE: 'delete',
+    GET: "get",
+    POST: "post",
+    PUT: "put",
+    PATCH: "patch",
+    DELETE: "delete",
   },
   STORAGE: {
-    GET: 'get',
-    SET: 'set',
-    REMOVE: 'remove',
+    GET: "get",
+    SET: "set",
+    REMOVE: "remove",
   },
   API: {
-    REQUEST: 'request',
+    REQUEST: "request",
   },
   APPEARANCE: {
-    GET_LOCALE: 'getLocale',
-    GET_THEME: 'getTheme',
+    GET_LOCALE: "getLocale",
+    GET_THEME: "getTheme",
   },
   AI: {
-    CHAT: 'chat',
+    CHAT: "chat",
   },
   EVENT: {
-    SUBSCRIBE: 'subscribe',
-    UNSUBSCRIBE: 'unsubscribe',
-    EMIT: 'emit',
+    SUBSCRIBE: "subscribe",
+    UNSUBSCRIBE: "unsubscribe",
+    EMIT: "emit",
   },
   HANDSHAKE: {
-    CONNECT: 'connect',
+    CONNECT: "connect",
   },
 } as const;
 
@@ -131,6 +131,6 @@ export const ACTIONS = {
  *    sync without polling `navigation.getCurrent()`.
  */
 export const NAVIGATION_EVENTS = {
-  BACK_REQUESTED: 'navigation.back.requested',
-  ROUTE_CHANGED: 'navigation.route.changed',
+  BACK_REQUESTED: "navigation.back.requested",
+  ROUTE_CHANGED: "navigation.route.changed",
 } as const;

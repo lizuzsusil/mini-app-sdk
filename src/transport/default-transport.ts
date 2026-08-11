@@ -1,10 +1,10 @@
-import { BROADCAST_TARGET, PLATFORM_EVENT_NAME } from '../constants';
-import { TransportError } from '../errors';
-import { isValidPlatformMessage } from '../protocol';
-import type { PlatformMessage } from '../protocol';
-import type { Logger } from '../logging';
-import { noopLogger } from '../logging';
-import type { Transport } from './transport';
+import { BROADCAST_TARGET, PLATFORM_EVENT_NAME } from "../constants";
+import { TransportError } from "../errors";
+import type { Logger } from "../logging";
+import { noopLogger } from "../logging";
+import type { PlatformMessage } from "../protocol";
+import { isValidPlatformMessage } from "../protocol";
+import type { Transport } from "./transport";
 
 export interface DefaultTransportOptions {
   logger?: Logger;
@@ -57,16 +57,17 @@ export class DefaultTransport implements Transport {
   }
 
   start(onMessage: (message: PlatformMessage) => void): void {
-    if (typeof window === 'undefined') {
+    if (typeof window === "undefined") {
       throw new TransportError({
-        code: 'TRANSPORT_NOT_STARTED',
-        message: 'DefaultTransport requires a `window` global (browser or WebView environment).',
+        code: "TRANSPORT_NOT_STARTED",
+        message:
+          "DefaultTransport requires a `window` global (browser or WebView environment).",
       });
     }
 
     this.messageListener = (event: MessageEvent) => {
       if (!this.isFromAllowedOrigin(event.origin)) {
-        this.logger.warn('Dropped message from an unexpected origin', {
+        this.logger.warn("Dropped message from an unexpected origin", {
           receivedOrigin: event.origin,
           pinnedOrigin: this.pinnedOrigin,
         });
@@ -77,7 +78,7 @@ export class DefaultTransport implements Transport {
       this.pinOriginIfUnset(event.origin);
       onMessage(event.data);
     };
-    window.addEventListener('message', this.messageListener);
+    window.addEventListener("message", this.messageListener);
 
     this.customEventListener = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
@@ -86,14 +87,16 @@ export class DefaultTransport implements Transport {
     };
     window.addEventListener(PLATFORM_EVENT_NAME, this.customEventListener);
 
-    this.logger.debug('DefaultTransport started', { allowedOrigin: this.pinnedOrigin ?? '(learned on first message)' });
+    this.logger.debug("DefaultTransport started", {
+      allowedOrigin: this.pinnedOrigin ?? "(learned on first message)",
+    });
   }
 
   stop(): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
     if (this.messageListener) {
-      window.removeEventListener('message', this.messageListener);
+      window.removeEventListener("message", this.messageListener);
       this.messageListener = null;
     }
     if (this.customEventListener) {
@@ -101,14 +104,15 @@ export class DefaultTransport implements Transport {
       this.customEventListener = null;
     }
 
-    this.logger.debug('DefaultTransport stopped');
+    this.logger.debug("DefaultTransport stopped");
   }
 
   send(message: PlatformMessage): void {
-    if (typeof window === 'undefined') {
+    if (typeof window === "undefined") {
       throw new TransportError({
-        code: 'TRANSPORT_NOT_STARTED',
-        message: 'DefaultTransport requires a `window` global (browser or WebView environment).',
+        code: "TRANSPORT_NOT_STARTED",
+        message:
+          "DefaultTransport requires a `window` global (browser or WebView environment).",
       });
     }
 
@@ -126,13 +130,13 @@ export class DefaultTransport implements Transport {
 
   private isFromAllowedOrigin(origin: string): boolean {
     if (this.pinnedOrigin === null) return true;
-    if (this.pinnedOrigin === '*') return true;
+    if (this.pinnedOrigin === "*") return true;
     return origin === this.pinnedOrigin;
   }
 
   private pinOriginIfUnset(origin: string): void {
     if (this.originLocked || this.pinnedOrigin !== null) return;
     this.pinnedOrigin = origin;
-    this.logger.debug('Pinned host origin from first message', { origin });
+    this.logger.debug("Pinned host origin from first message", { origin });
   }
 }

@@ -1,4 +1,4 @@
-import type { RpcClient } from '../rpc';
+import type { RpcClient } from "../rpc";
 
 export type ModuleFactory<T = unknown> = (rpc: RpcClient) => T;
 

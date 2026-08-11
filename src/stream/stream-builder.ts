@@ -1,4 +1,4 @@
-import type { StreamChunk } from '@lizuz/mini-app-types';
+import type { StreamChunk } from "@lizuz/mini-app-types";
 
 /**
  * Accumulates the chunks of an in-flight streamed response and hands the
@@ -17,10 +17,12 @@ export class StreamBuilder {
   private resolved = false;
   private rejected = false;
 
-  private readonly promise = new Promise<(Uint8Array | string)[]>((resolve, reject) => {
-    this.resolve = resolve;
-    this.reject = reject;
-  });
+  private readonly promise = new Promise<(Uint8Array | string)[]>(
+    (resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    },
+  );
 
   private resolve?: (chunks: (Uint8Array | string)[]) => void;
   private reject?: (err: Error) => void;

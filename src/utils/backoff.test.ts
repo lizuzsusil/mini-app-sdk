@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { computeBackoffMs } from './backoff';
+import { describe, expect, it } from "vitest";
+import { computeBackoffMs } from "./backoff";
 
-describe('computeBackoffMs', () => {
-  it('grows exponentially with the attempt number, before capping', () => {
+describe("computeBackoffMs", () => {
+  it("grows exponentially with the attempt number, before capping", () => {
     const base = 100;
     const max = 10_000;
 
@@ -21,7 +21,7 @@ describe('computeBackoffMs', () => {
     expect(attempt2).toBeLessThan(400 * 1.3 + 1);
   });
 
-  it('never exceeds maxMs, even including jitter', () => {
+  it("never exceeds maxMs, even including jitter", () => {
     const base = 1000;
     const max = 2000;
 
@@ -31,8 +31,10 @@ describe('computeBackoffMs', () => {
     }
   });
 
-  it('produces different values across repeated calls (jitter is actually random)', () => {
-    const values = new Set(Array.from({ length: 20 }, () => computeBackoffMs(3, 200, 10_000)));
+  it("produces different values across repeated calls (jitter is actually random)", () => {
+    const values = new Set(
+      Array.from({ length: 20 }, () => computeBackoffMs(3, 200, 10_000)),
+    );
     expect(values.size).toBeGreaterThan(1);
   });
 });

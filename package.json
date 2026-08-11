@@ -26,15 +26,21 @@
     "typecheck": "tsc --noEmit",
     "build:lib": "tsup src/index.ts --format cjs,esm --clean && mv dist/index.js dist/sewa-sdk.js && mv dist/index.mjs dist/sewa-sdk.mjs",
     "build:cdn": "esbuild src/cdn.ts --bundle --format=iife --platform=browser --target=es2020 --minify --outfile=dist/sewa-sdk.min.js",
-    "build": "npm run build:lib && npm run build:cdn",
+    "build": "biome check --error-on-warnings --max-diagnostics=200 . && npm run build:lib && npm run build:cdn",
     "test": "vitest run",
     "test:watch": "vitest",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "check": "biome check --write .",
+    "lint:fix": "npm run lint && npm run check"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.7",
     "@lizuz/mini-app-types": "^1.0.14",
     "esbuild": "^0.28.1",
     "jsdom": "^29.1.1",
+    "release-please": "^17.11.1",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

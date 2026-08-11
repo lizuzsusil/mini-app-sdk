@@ -1,5 +1,5 @@
-import { ACTIONS, NAMESPACES } from '../constants';
-import type { RpcClient } from '../rpc';
+import { ACTIONS, NAMESPACES } from "../constants";
+import type { RpcClient } from "../rpc";
 import type {
   HttpDeleteParams,
   HttpGetParams,
@@ -8,7 +8,7 @@ import type {
   HttpPutParams,
   HttpResult,
   HttpSdkModule,
-} from '../types';
+} from "../types";
 
 export function createHttpModule(rpc: RpcClient): HttpSdkModule {
   return {

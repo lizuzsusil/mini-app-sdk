@@ -6,16 +6,16 @@
  * this union only constrains codes the SDK *generates*.
  */
 export type SdkErrorCode =
-  | 'TIMEOUT'
-  | 'TRANSPORT_NOT_STARTED'
-  | 'TRANSPORT_SEND_FAILED'
-  | 'HANDSHAKE_FAILED'
-  | 'HANDSHAKE_TIMEOUT'
-  | 'INVALID_MESSAGE'
-  | 'SDK_NOT_INITIALIZED'
-  | 'SDK_ALREADY_DESTROYED'
-  | 'REQUEST_CANCELLED'
-  | 'HOST_ERROR';
+  | "TIMEOUT"
+  | "TRANSPORT_NOT_STARTED"
+  | "TRANSPORT_SEND_FAILED"
+  | "HANDSHAKE_FAILED"
+  | "HANDSHAKE_TIMEOUT"
+  | "INVALID_MESSAGE"
+  | "SDK_NOT_INITIALIZED"
+  | "SDK_ALREADY_DESTROYED"
+  | "REQUEST_CANCELLED"
+  | "HOST_ERROR";
 
 export interface SdkErrorOptions {
   code: SdkErrorCode | (string & {});
@@ -35,16 +35,15 @@ export class SdkError extends Error {
   readonly code: string;
   readonly retryable: boolean;
   readonly details: Record<string, unknown> | undefined;
+  readonly cause: unknown;
 
   constructor(options: SdkErrorOptions) {
     super(options.message);
-    this.name = 'SdkError';
+    this.name = "SdkError";
     this.code = options.code;
     this.retryable = options.retryable ?? false;
     this.details = options.details;
-    if (options.cause !== undefined) {
-      (this as any).cause = options.cause;
-    }
+    this.cause = options.cause;
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }

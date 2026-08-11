@@ -31,7 +31,10 @@ export type RpcNext<T> = () => Promise<T>;
  * };
  * ```
  */
-export type RpcMiddleware = <T>(context: RpcMiddlewareContext, next: RpcNext<T>) => Promise<T>;
+export type RpcMiddleware = <T>(
+  context: RpcMiddlewareContext,
+  next: RpcNext<T>,
+) => Promise<T>;
 
 /**
  * Builds a single callable from a list of middlewares plus a terminal
@@ -47,13 +50,13 @@ export type RpcMiddleware = <T>(context: RpcMiddlewareContext, next: RpcNext<T>)
 export function composeMiddleware<T>(
   middlewares: readonly RpcMiddleware[],
   context: RpcMiddlewareContext,
-  terminal: RpcNext<T>
+  terminal: RpcNext<T>,
 ): Promise<T> {
   let index = -1;
 
   function dispatch(i: number): Promise<T> {
     if (i <= index) {
-      throw new Error('next() called multiple times in one middleware');
+      throw new Error("next() called multiple times in one middleware");
     }
     index = i;
 
