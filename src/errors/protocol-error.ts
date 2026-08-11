@@ -1,4 +1,4 @@
-import type { PlatformError } from "../protocol/message.types";
+import type { PlatformError } from "../protocol";
 import { SdkError } from "./sdk-error";
 
 /**

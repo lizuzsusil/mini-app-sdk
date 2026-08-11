@@ -136,7 +136,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
     this.hostDescriptor =
       typeof window !== "undefined"
-        ? ((window as any)[HOST_DESCRIPTOR_GLOBAL_KEY] ?? null)
+         ? (((window as unknown as Record<string, unknown>)[
+            HOST_DESCRIPTOR_GLOBAL_KEY
+          ] as HostDescriptor | undefined) ?? null)
         : null;
 
     const transport =
@@ -172,20 +174,20 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.register(NAMESPACES.AI, createChatModule);
     this.registry.build(this.rpc);
 
-    this.auth = this.registry.get<AuthSdkModule>(NAMESPACES.AUTH)!;
-    this.permissions = this.registry.get<PermissionsSdkModule>(
+    this.auth = this.requireModule<AuthSdkModule>(NAMESPACES.AUTH);
+    this.permissions = this.requireModule<PermissionsSdkModule>(
       NAMESPACES.PERMISSIONS,
-    )!;
-    this.flags = this.registry.get<FlagsSdkModule>(NAMESPACES.FLAGS)!;
-    this.config = this.registry.get<ConfigSdkModule>(NAMESPACES.CONFIG)!;
-    this.navigation = this.registry.get<NavigationSdkModule>(
+    );
+    this.flags = this.requireModule<FlagsSdkModule>(NAMESPACES.FLAGS);
+    this.config = this.requireModule<ConfigSdkModule>(NAMESPACES.CONFIG);
+    this.navigation = this.requireModule<NavigationSdkModule>(
       NAMESPACES.NAVIGATION,
-    )!;
-    this.storage = this.registry.get<StorageSdkModule>(NAMESPACES.STORAGE)!;
-    this.device = this.registry.get<DeviceSdkModule>(NAMESPACES.DEVICE)!;
-    this.api = this.registry.get<ApiSdkModule>(NAMESPACES.API)!;
-    this.http = this.registry.get<HttpSdkModule>(NAMESPACES.HTTP)!;
-    this.ai = this.registry.get<ChatSdkModule>(NAMESPACES.AI)!;
+    );
+    this.storage = this.requireModule<StorageSdkModule>(NAMESPACES.STORAGE);
+    this.device = this.requireModule<DeviceSdkModule>(NAMESPACES.DEVICE);
+    this.api = this.requireModule<ApiSdkModule>(NAMESPACES.API);
+    this.http = this.requireModule<HttpSdkModule>(NAMESPACES.HTTP);
+    this.ai = this.requireModule<ChatSdkModule>(NAMESPACES.AI);
 
     const platformHandle = createPlatformModule("web");
     this.platform = platformHandle.module;
@@ -195,8 +197,25 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.appearance = this.appearanceHandle.module;
 
     if (typeof globalThis !== "undefined") {
-      (globalThis as any)[SDK_GLOBAL_KEY] = this;
+      (globalThis as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY] = this;
     }
+  }
+
+  /**
+   * Retrieves a module by namespace, throwing if it hasn't been registered.
+   * Every module assigned in the constructor is registered just above this
+   * helper's call sites, so reaching this code with a missing module is a
+   * programmer error, not a runtime condition.
+   */
+  private requireModule<T>(name: string): T {
+    const module = this.registry.get<T>(name);
+    if (!module) {
+      throw new SdkError({
+        code: "SDK_NOT_INITIALIZED",
+        message: `Module "${name}" was not registered with the SDK.`,
+      });
+    }
+    return module;
   }
 
   /**
@@ -315,9 +334,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.destroyed = true;
     if (
       typeof globalThis !== "undefined" &&
-      (globalThis as any)[SDK_GLOBAL_KEY] === this
+      (globalThis as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY] ===
+        this
     ) {
-      delete (globalThis as any)[SDK_GLOBAL_KEY];
+      delete (globalThis as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY];
     }
     this.logger.info(`MiniAppSdk("${this.miniAppId}") destroyed`);
   }
