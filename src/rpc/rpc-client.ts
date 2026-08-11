@@ -386,7 +386,7 @@ export class RpcClient {
       });
     }
 
-    this.eventHandlers.get(event)!.add(handler as EventHandler);
+    this.eventHandlers.get(event)?.add(handler as EventHandler);
     return () => {
       this.eventHandlers.get(event)?.delete(handler as EventHandler);
     };
@@ -447,7 +447,7 @@ export class RpcClient {
 
     if (ack.capabilities) {
       this.negotiatedCapabilities = SDK_CAPABILITIES.filter((capability) =>
-        ack.capabilities!.includes(capability),
+        ack.capabilities?.includes(capability),
       );
       this.logger.debug("Negotiated capabilities with host", {
         capabilities: this.negotiatedCapabilities,

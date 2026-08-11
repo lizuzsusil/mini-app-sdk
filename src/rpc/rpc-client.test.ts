@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ACTIONS, HOST_TARGET, NAMESPACES } from "../constants";
 import { HandshakeError, ProtocolError, TimeoutError } from "../errors";
 import { createMessage } from "../protocol";
-import { FakeTransport } from "../testing/fake-transport";
+import { FakeTransport } from "../testing";
 import { RpcClient } from "./rpc-client";
 
 function makeClient(

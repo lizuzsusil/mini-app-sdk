@@ -26,7 +26,7 @@
     "typecheck": "tsc --noEmit",
     "build:lib": "tsup src/index.ts --format cjs,esm --clean && mv dist/index.js dist/sewa-sdk.js && mv dist/index.mjs dist/sewa-sdk.mjs",
     "build:cdn": "esbuild src/cdn.ts --bundle --format=iife --platform=browser --target=es2020 --minify --outfile=dist/sewa-sdk.min.js",
-    "build": "npm run build:lib && npm run build:cdn",
+    "build": "biome check --error-on-warnings --max-diagnostics=200 . && npm run build:lib && npm run build:cdn",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist",

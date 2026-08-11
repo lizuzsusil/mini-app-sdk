@@ -136,7 +136,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
     this.hostDescriptor =
       typeof window !== "undefined"
-         ? (((window as unknown as Record<string, unknown>)[
+        ? (((window as unknown as Record<string, unknown>)[
             HOST_DESCRIPTOR_GLOBAL_KEY
           ] as HostDescriptor | undefined) ?? null)
         : null;
