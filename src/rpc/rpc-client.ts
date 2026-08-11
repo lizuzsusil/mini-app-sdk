@@ -597,7 +597,9 @@ export class RpcClient {
     if (message.type === "event") {
       const key = `${message.namespace}.${message.action}`;
       const handlers = this.eventHandlers.get(key);
-      handlers?.forEach((handler) => handler(message.payload));
+      handlers?.forEach((handler) => {
+        handler(message.payload);
+      });
     }
   }
 }
