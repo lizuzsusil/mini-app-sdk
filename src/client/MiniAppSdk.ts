@@ -30,7 +30,7 @@ import {
   ModuleRegistry,
 } from "../modules";
 import type { RpcMetricsSnapshot } from "../observability";
-import type { RpcMiddleware } from "../rpc";
+import type { RpcMiddleware, RpcRequestOptions } from "../rpc";
 import { RpcClient } from "../rpc";
 import type { Transport } from "../transport";
 import { DefaultTransport } from "../transport";
@@ -160,6 +160,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       maxRetryDelayMs: options.maxRetryDelayMs,
       logger: this.logger,
       devMode,
+      heartbeat: options.heartbeat,
     });
     this.traceId = this.rpc.getTraceId();
 
@@ -391,6 +392,16 @@ export class MiniAppSdk implements MiniAppSdkInterface {
    */
   on(event: string, handler: EventHandler): () => void {
     return this.rpc.onEvent(event, handler);
+  }
+
+  /** @inheritdoc */
+  request<T>(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+    options?: RpcRequestOptions,
+  ): Promise<T> {
+    return this.rpc.request<T>(namespace, action, payload, options);
   }
 
   /** @inheritdoc */

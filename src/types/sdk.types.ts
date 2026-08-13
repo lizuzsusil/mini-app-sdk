@@ -12,7 +12,7 @@ import type {
   PlatformSdkModule,
 } from "@lizuz/mini-app-types";
 import type { RpcMetricsSnapshot } from "../observability";
-import type { RpcClient, RpcMiddleware } from "../rpc";
+import type { RpcClient, RpcMiddleware, RpcRequestOptions } from "../rpc";
 import type { TransportDebugInfo } from "../transport";
 import type { ChatSdkModule } from "./chat.types";
 import type { PlatformTypeLiteral } from "./common.types";
@@ -100,6 +100,19 @@ export interface MiniAppSdkInterface {
   destroy(): void;
   on(event: string, handler: EventHandler): () => void;
 
+  /**
+   * Low-level escape hatch for host calls that don't have a dedicated module
+   * method yet, or need per-call control. Identical semantics to any module
+   * call (retry, timeout, middleware, metrics), plus optional per-request
+   * options such as an `AbortSignal`.
+   */
+  request<T>(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+    options?: RpcRequestOptions,
+  ): Promise<T>;
+
   /** Publishes an event to the shell's internal event bus. Other shell components may listen. Mini-apps cannot subscribe to each other directly. */
   emit(event: string, data?: unknown): void;
 
@@ -111,6 +124,19 @@ export interface MiniAppSdkInterface {
   registerModule<T>(name: string, factory: (rpc: RpcClient) => T): void;
   /** Retrieves a module registered via `registerModule()`, or any built-in module by its namespace name. */
   getModule<T>(name: string): T | undefined;
+}
+
+/**
+ * Tuning for the optional liveness check and automatic reconnection. Provide
+ * `heartbeat` in `MiniAppSdkOptions` to enable it.
+ */
+export interface HeartbeatOptions {
+  /** How often to send a `heartbeat.ping` to the host, in ms. Defaults to 30000. */
+  intervalMs?: number;
+  /** How long to wait for the pong before counting a miss, in ms. Defaults to 5000. */
+  timeoutMs?: number;
+  /** Consecutive missed pongs before the connection is declared lost. Defaults to 2. */
+  maxMissedPongs?: number;
 }
 
 /**
@@ -135,4 +161,12 @@ export interface MiniAppSdkOptions {
    * `process.env.NODE_ENV !== "production"` (auto-detect).
    */
   devMode?: boolean;
+  /**
+   * Enables the optional heartbeat & reconnect: the SDK periodically pings
+   * the host, and when `maxMissedPongs` go unanswered it emits
+   * `connection.lost`, re-runs the handshake with backoff, then emits
+   * `connection.established` on success. Off by default — the host must
+   * answer `heartbeat.ping`.
+   */
+  heartbeat?: HeartbeatOptions;
 }

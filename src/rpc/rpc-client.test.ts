@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { ACTIONS, HOST_TARGET, NAMESPACES } from "../constants";
-import { HandshakeError, ProtocolError, TimeoutError } from "../errors";
+import {
+  ACTIONS,
+  CONNECTION_EVENTS,
+  HOST_TARGET,
+  NAMESPACES,
+} from "../constants";
+import {
+  HandshakeError,
+  ProtocolError,
+  RequestCancelledError,
+  TimeoutError,
+} from "../errors";
 import type { Logger } from "../logging";
 import type { PlatformMessage } from "../protocol";
 import { createMessage } from "../protocol";
@@ -733,5 +743,221 @@ describe("RpcClient stream requests", () => {
 
     await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(ProtocolError);
     expect(builder.isRejected).toBe(true);
+  });
+});
+
+describe("RpcClient AbortSignal cancellation", () => {
+  it("rejects an in-flight request with RequestCancelledError when the signal fires", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 5000 });
+    client.start();
+
+    const controller = new AbortController();
+    const promise = client.request(
+      NAMESPACES.DEVICE,
+      ACTIONS.DEVICE.LOCATION,
+      undefined,
+      { signal: controller.signal },
+    );
+    expect(transport.lastSent).toBeTruthy();
+
+    controller.abort();
+
+    await expect(promise).rejects.toBeInstanceOf(RequestCancelledError);
+    expect(client.getPendingRequests()).toHaveLength(0);
+  });
+
+  it("rejects immediately without sending when the signal is already aborted", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 5000 });
+    client.start();
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const promise = client.request(
+      NAMESPACES.DEVICE,
+      ACTIONS.DEVICE.LOCATION,
+      undefined,
+      { signal: controller.signal },
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(RequestCancelledError);
+    expect(transport.sent).toHaveLength(0);
+  });
+
+  it("aborts during the retry backoff instead of waiting it out", async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = new FakeTransport();
+      const client = makeClient(transport, {
+        timeout: 10,
+        retryAttempts: 2,
+        retryDelayMs: 1000,
+      });
+      client.start();
+
+      const controller = new AbortController();
+      const promise = client.request(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.NETWORK,
+        undefined,
+        { signal: controller.signal },
+      );
+
+      // Let the first attempt time out (retryable) and settle into its backoff.
+      await vi.advanceTimersByTimeAsync(10);
+      controller.abort();
+
+      await expect(promise).rejects.toBeInstanceOf(RequestCancelledError);
+      expect(transport.sent).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("RpcClient heartbeat & reconnect", () => {
+  async function completeHandshake(
+    transport: FakeTransport,
+    client: RpcClient,
+  ): Promise<void> {
+    const promise = client.handshake();
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "handshake",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        { status: "ok" },
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+    await promise;
+  }
+
+  function answerRequest(transport: FakeTransport): void {
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        undefined,
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+  }
+
+  function makeHeartbeatClient(transport: FakeTransport): RpcClient {
+    return new RpcClient(transport, {
+      miniAppId: "test-mini-app",
+      timeout: 5000,
+      retryAttempts: 0,
+      heartbeat: { intervalMs: 1000, timeoutMs: 2000, maxMissedPongs: 2 },
+    });
+  }
+
+  it("sends heartbeat.ping on the configured interval after the handshake", async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = new FakeTransport();
+      const client = makeHeartbeatClient(transport);
+      client.start();
+      await completeHandshake(transport, client);
+
+      expect(transport.sent).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(transport.sent).toHaveLength(2);
+      const ping = transport.lastSent!;
+      expect(ping.namespace).toBe(NAMESPACES.HEARTBEAT);
+      expect(ping.action).toBe(ACTIONS.HEARTBEAT.PING);
+
+      client.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resets the miss counter when the host answers a ping", async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = new FakeTransport();
+      const client = makeHeartbeatClient(transport);
+      const lost = vi.fn();
+      client.onEvent(CONNECTION_EVENTS.LOST, lost);
+      client.start();
+      await completeHandshake(transport, client);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(transport.lastSent!.action).toBe(ACTIONS.HEARTBEAT.PING);
+      answerRequest(transport);
+
+      // Answer enough pings that a dead host would have tripped the counter.
+      for (let i = 0; i < 3; i++) {
+        await vi.advanceTimersByTimeAsync(1000);
+        answerRequest(transport);
+      }
+
+      expect(lost).not.toHaveBeenCalled();
+      client.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("emits connection.lost, re-handshakes, and emits connection.established", async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = new FakeTransport();
+      const client = makeHeartbeatClient(transport);
+      const lost = vi.fn();
+      const established = vi.fn();
+      client.onEvent(CONNECTION_EVENTS.LOST, lost);
+      client.onEvent(CONNECTION_EVENTS.ESTABLISHED, established);
+      client.start();
+      await completeHandshake(transport, client);
+
+      // Two unanswered pings (per-ping timeout of 2000ms each) trip the counter.
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(lost).toHaveBeenCalledTimes(1);
+      expect(lost).toHaveBeenCalledWith({ timestamp: expect.any(Number) });
+
+      // The reconnect handshake has been sent; answer it to complete recovery.
+      expect(transport.lastSent!.type).toBe("handshake");
+      answerRequest(transport);
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(established).toHaveBeenCalledTimes(1);
+      expect(established).toHaveBeenCalledWith({ timestamp: expect.any(Number) });
+
+      client.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does nothing when heartbeat is not configured", async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = new FakeTransport();
+      const client = makeClient(transport);
+      client.start();
+      await completeHandshake(transport, client);
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(transport.sent).toHaveLength(1);
+
+      client.stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

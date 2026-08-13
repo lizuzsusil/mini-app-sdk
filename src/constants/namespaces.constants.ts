@@ -18,6 +18,7 @@ export const NAMESPACES = {
   AI: "ai",
   EVENT: "event",
   HANDSHAKE: "handshake",
+  HEARTBEAT: "heartbeat",
 } as const;
 
 export type Namespace = (typeof NAMESPACES)[keyof typeof NAMESPACES];
@@ -117,6 +118,9 @@ export const ACTIONS = {
   HANDSHAKE: {
     CONNECT: "connect",
   },
+  HEARTBEAT: {
+    PING: "ping",
+  },
 } as const;
 
 /**
@@ -133,4 +137,16 @@ export const ACTIONS = {
 export const NAVIGATION_EVENTS = {
   BACK_REQUESTED: "navigation.back.requested",
   ROUTE_CHANGED: "navigation.route.changed",
+} as const;
+
+/**
+ * Connection-state events the SDK itself emits (as opposed to host-published
+ * events). Mini apps subscribe with `sdk.on("connection.lost", …)` /
+ * `sdk.on("connection.established", …)` to reconcile state — re-fetch config
+ * or flags, re-subscribe to events — after a host restart or transport drop.
+ * Emitted only when the heartbeat/reconnect feature is enabled.
+ */
+export const CONNECTION_EVENTS = {
+  LOST: "connection.lost",
+  ESTABLISHED: "connection.established",
 } as const;

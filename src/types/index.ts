@@ -65,6 +65,7 @@ export type {
   HttpPutParams,
 } from "./http.types";
 export type {
+  HeartbeatOptions,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
   PendingRequestInfo,

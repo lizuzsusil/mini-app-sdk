@@ -1,6 +1,7 @@
 export type { Namespace } from "./namespaces.constants";
 export {
   ACTIONS,
+  CONNECTION_EVENTS,
   NAMESPACES,
   NAVIGATION_EVENTS,
   SDK_CAPABILITIES,

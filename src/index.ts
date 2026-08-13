@@ -4,18 +4,24 @@ import type { MiniAppSdkOptions } from "./types";
 
 export { MiniAppSdk } from "./client";
 export {
+  CONNECTION_EVENTS,
   MESSAGE_CHANNEL,
   NAVIGATION_EVENTS,
   PLATFORM_EVENT_NAME,
   PROTOCOL_VERSION,
 } from "./constants";
 export type { SdkErrorCode } from "./errors";
-export { SdkError } from "./errors";
+export { RequestCancelledError, SdkError } from "./errors";
 export type { ConsoleLoggerOptions, Logger } from "./logging";
 export { ConsoleLogger, NoopLogger } from "./logging";
 export type { AppearanceModuleHandle } from "./modules";
 export type { ActionMetrics, RpcMetricsSnapshot } from "./observability";
-export type { RpcMiddleware, RpcMiddlewareContext, RpcNext } from "./rpc";
+export type {
+  RpcMiddleware,
+  RpcMiddlewareContext,
+  RpcNext,
+  RpcRequestOptions,
+} from "./rpc";
 export { StreamBuilder } from "./stream";
 export type {
   ApiRequestParams,
@@ -45,6 +51,7 @@ export type {
   Direction,
   EventHandler,
   FlagsSdkModule,
+  HeartbeatOptions,
   HostDescriptor,
   HttpDeleteParams,
   HttpGetParams,

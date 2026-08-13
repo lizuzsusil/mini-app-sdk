@@ -1,11 +1,17 @@
 import {
   ACTIONS,
+  CONNECTION_EVENTS,
   HOST_TARGET,
   NAMESPACES,
   PROTOCOL_VERSION,
   SDK_CAPABILITIES,
 } from "../constants";
-import { HandshakeError, ProtocolError, TimeoutError } from "../errors";
+import {
+  HandshakeError,
+  ProtocolError,
+  RequestCancelledError,
+  TimeoutError,
+} from "../errors";
 import type { Logger } from "../logging";
 import { noopLogger } from "../logging";
 import type { RpcMetricsSnapshot } from "../observability";
@@ -22,12 +28,22 @@ import {
 } from "../protocol";
 import { StreamBuilder } from "../stream";
 import type { Transport, TransportDebugInfo } from "../transport";
-import type { PendingRequestInfo } from "../types";
+import type { HeartbeatOptions, PendingRequestInfo } from "../types";
 import { computeBackoffMs, delay, generateId } from "../utils";
 import type { RpcMiddleware } from "./middleware";
 import { composeMiddleware } from "./middleware";
 
 export type EventHandler<TPayload = unknown> = (payload: TPayload) => void;
+
+/** Per-request control knobs passed to `request()`. */
+export interface RpcRequestOptions {
+  /**
+   * When provided, aborting the signal rejects the in-flight request (and any
+   * pending retries) with a `RequestCancelledError` — useful for unmounting
+   * screens or navigating away without waiting for the timeout.
+   */
+  signal?: AbortSignal;
+}
 
 export interface RpcClientOptions {
   miniAppId: string;
@@ -42,6 +58,8 @@ export interface RpcClientOptions {
    * false (production). Defaults to false.
    */
   devMode?: boolean;
+  /** Enables the optional heartbeat & reconnect (see `HeartbeatOptions`). */
+  heartbeat?: HeartbeatOptions;
 }
 
 interface PendingRequest {
@@ -58,6 +76,9 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_RETRY_ATTEMPTS = 2;
 const DEFAULT_RETRY_DELAY_MS = 500;
 const DEFAULT_MAX_RETRY_DELAY_MS = 8_000;
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
+const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
+const DEFAULT_MAX_MISSED_PONGS = 2;
 
 /**
  * The SDK package version reported during handshake. Kept separate from
@@ -87,6 +108,7 @@ export class RpcClient {
   private readonly logger: Logger;
   private readonly devMode: boolean;
   private readonly transport: Transport;
+  private readonly heartbeatOptions: HeartbeatOptions | null;
 
   private readonly pending = new Map<string, PendingRequest>();
   private readonly eventHandlers = new Map<string, Set<EventHandler>>();
@@ -96,6 +118,16 @@ export class RpcClient {
   private readonly warnedUnavailableCapabilities = new Set<string>();
   private readonly traceId: string;
   private started = false;
+
+  /** Set while a reconnect (re-run of the handshake) is in progress. */
+  private reconnectInProgress = false;
+  private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private heartbeatMissedPongs = 0;
+  /** Heartbeat pings awaiting a pong, keyed by requestId. */
+  private readonly heartbeatPings = new Map<
+    string,
+    { onPong: () => void; timer: ReturnType<typeof setTimeout> }
+  >();
 
   /**
    * Namespaces the host confirmed support for during the handshake. `null`
@@ -117,6 +149,7 @@ export class RpcClient {
       options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS;
     this.logger = options.logger ?? noopLogger;
     this.devMode = options.devMode ?? false;
+    this.heartbeatOptions = options.heartbeat ?? null;
     this.traceId = generateId();
   }
 
@@ -134,6 +167,8 @@ export class RpcClient {
   stop(): void {
     this.transport.stop();
     this.started = false;
+    this.reconnectInProgress = false;
+    this.stopHeartbeat();
 
     for (const [id, request] of this.pending) {
       clearTimeout(request.timer);
@@ -238,18 +273,22 @@ export class RpcClient {
   /**
    * Sends a request and resolves with the host's response payload. Passes
    * through any registered middleware, then through the retry loop
-   * described on `executeWithRetry`.
+   * described on `executeWithRetry`. An optional `AbortSignal` in `options`
+   * cancels the request (including any queued retries) with a
+   * `RequestCancelledError` as soon as it fires.
    */
   async request<T>(
     namespace: string,
     action: string,
     payload?: unknown,
+    options?: RpcRequestOptions,
   ): Promise<T> {
     this.warnOnUnavailableCapability(namespace, action);
     return composeMiddleware<T>(
       this.middlewares,
       { namespace, action, payload, attempt: 0 },
-      () => this.executeWithRetry<T>(namespace, action, payload),
+      () =>
+        this.executeWithRetry<T>(namespace, action, payload, options?.signal),
     );
   }
 
@@ -286,13 +325,27 @@ export class RpcClient {
     namespace: string,
     action: string,
     payload?: unknown,
+    signal?: AbortSignal,
   ): Promise<T> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= this.retryAttempts; attempt++) {
+      if (signal?.aborted) {
+        throw new RequestCancelledError({
+          namespace,
+          action,
+          cause: signal.reason,
+        });
+      }
+
       const startedAt = Date.now();
       try {
-        const result = await this.sendRequest<T>(namespace, action, payload);
+        const result = await this.sendRequest<T>(
+          namespace,
+          action,
+          payload,
+          signal,
+        );
         this.metricsRecorder.recordSuccess(
           namespace,
           action,
@@ -316,8 +369,11 @@ export class RpcClient {
         if (!retryable) throw lastError;
         if (attempt < this.retryAttempts) {
           this.metricsRecorder.recordRetry(namespace, action);
-          await delay(
+          await this.abortAwareDelay(
             computeBackoffMs(attempt, this.retryDelayMs, this.maxRetryDelayMs),
+            namespace,
+            action,
+            signal,
           );
         }
       }
@@ -330,6 +386,47 @@ export class RpcClient {
         message: `Request "${namespace}.${action}" failed for an unknown reason`,
       })
     );
+  }
+
+  /**
+   * Delays while watching an `AbortSignal`: aborts reject early with a
+   * `RequestCancelledError` instead of letting the caller wait out a backoff
+   * that no longer matters.
+   */
+  private async abortAwareDelay(
+    ms: number,
+    namespace: string,
+    action: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (!signal) {
+      await delay(ms);
+      return;
+    }
+    if (signal.aborted) {
+      throw new RequestCancelledError({
+        namespace,
+        action,
+        cause: signal.reason,
+      });
+    }
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, ms);
+      signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timer);
+          reject(
+            new RequestCancelledError({
+              namespace,
+              action,
+              cause: signal.reason,
+            }),
+          );
+        },
+        { once: true },
+      );
+    });
   }
 
   /**
@@ -478,6 +575,136 @@ export class RpcClient {
     return this.transport.getDebugInfo?.() ?? { started: this.started };
   }
 
+  /**
+   * Dispatches a local (SDK-originated) event to subscribers without going
+   * through the transport or the host — used for connection-state
+   * notifications that the host itself cannot deliver because the link is
+   * down. Subscribers register exactly as they would for a host event:
+   * `sdk.on("connection.lost", …)`. Matching the host-event routing, the
+   * subscription fires as `event.subscribe` only when at least one handler
+   * exists, so first registering a listener marks the connection "live".
+   */
+  private emitLocalEvent(event: string, payload: unknown): void {
+    const handlers = this.eventHandlers.get(event);
+    handlers?.forEach((handler) => {
+      try {
+        handler(payload);
+      } catch (error) {
+        this.logger.warn(`Event handler for "${event}" threw`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+  }
+
+  private startHeartbeat(): void {
+    if (!this.heartbeatOptions || this.heartbeatInterval) return;
+
+    const intervalMs =
+      this.heartbeatOptions.intervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+    this.heartbeatInterval = setInterval(() => {
+      void this.maybeSendHeartbeat();
+    }, intervalMs);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    this.heartbeatMissedPongs = 0;
+    for (const [requestId, ping] of this.heartbeatPings) {
+      clearTimeout(ping.timer);
+      ping.onPong();
+      this.heartbeatPings.delete(requestId);
+    }
+  }
+
+  private maybeSendHeartbeat(): void {
+    if (!this.started) return;
+    if (this.reconnectInProgress) return;
+
+    const timeoutMs =
+      this.heartbeatOptions?.timeoutMs ?? DEFAULT_HEARTBEAT_TIMEOUT_MS;
+    const maxMissedPongs =
+      this.heartbeatOptions?.maxMissedPongs ?? DEFAULT_MAX_MISSED_PONGS;
+
+    const heartbeatId = `${NAMESPACES.HEARTBEAT}.${ACTIONS.HEARTBEAT.PING}`;
+
+    this.request<unknown>(
+      NAMESPACES.HEARTBEAT,
+      ACTIONS.HEARTBEAT.PING,
+      undefined,
+    )
+      .then(() => {
+        const ping = this.heartbeatPings.get(heartbeatId);
+        if (ping) {
+          clearTimeout(ping.timer);
+          ping.onPong();
+          this.heartbeatPings.delete(heartbeatId);
+        }
+      })
+      .catch(() => {
+        // The per-ping timer below already counted the miss; a request-level
+        // failure (timeout after retries, transport error) only means the
+        // host did not answer, which is what the counter records.
+      });
+
+    this.heartbeatPings.set(heartbeatId, {
+      onPong: () => {
+        this.heartbeatMissedPongs = 0;
+      },
+      timer: setTimeout(() => {
+        this.heartbeatPings.delete(heartbeatId);
+        this.heartbeatMissedPongs += 1;
+        if (this.heartbeatMissedPongs >= maxMissedPongs) {
+          this.handleLostConnection();
+        }
+      }, timeoutMs),
+    });
+  }
+
+  private handleLostConnection(): void {
+    if (!this.started || this.reconnectInProgress) return;
+    this.reconnectInProgress = true;
+
+    this.stopHeartbeat();
+    this.emitLocalEvent(CONNECTION_EVENTS.LOST, {
+      timestamp: Date.now(),
+    });
+
+    void this.reconnect();
+  }
+
+  private async reconnect(): Promise<void> {
+    let attempt = 0;
+    while (this.started) {
+      try {
+        await this.handshake();
+        this.reconnectInProgress = false;
+        this.heartbeatMissedPongs = 0;
+        this.emitLocalEvent(CONNECTION_EVENTS.ESTABLISHED, {
+          timestamp: Date.now(),
+        });
+        return;
+      } catch {
+        const maxAttempts = Math.max(1, this.retryAttempts);
+        if (attempt >= maxAttempts) {
+          this.logger.warn(
+            "Reconnect failed; giving up after repeated handshake failures",
+            { attempts: attempt + 1 },
+          );
+          this.reconnectInProgress = false;
+          return;
+        }
+        attempt += 1;
+        await delay(
+          computeBackoffMs(attempt, this.retryDelayMs, this.maxRetryDelayMs),
+        );
+      }
+    }
+  }
+
   private completeHandshake(
     ackPayload: unknown,
     resolvePromise: () => void,
@@ -526,12 +753,14 @@ export class RpcClient {
     }
 
     resolvePromise();
+    this.startHeartbeat();
   }
 
   private sendRequest<T>(
     namespace: string,
     action: string,
     payload?: unknown,
+    signal?: AbortSignal,
   ): Promise<T> {
     const message = createMessage(
       "request",
@@ -546,23 +775,68 @@ export class RpcClient {
     );
 
     return new Promise<T>((resolve, reject) => {
+      const cleanupSignal = (): void => {
+        signal?.removeEventListener("abort", handleAbort);
+      };
+
+      const handleAbort = (): void => {
+        if (this.pending.has(message.requestId)) {
+          this.pending.delete(message.requestId);
+        }
+        clearTimeout(timer);
+        cleanupSignal();
+        reject(
+          new RequestCancelledError({
+            namespace,
+            action,
+            cause: signal?.reason,
+          }),
+        );
+      };
+
       const timer = setTimeout(() => {
+        cleanupSignal();
         this.pending.delete(message.requestId);
         reject(
           new TimeoutError({ namespace, action, timeoutMs: this.timeout }),
         );
       }, this.timeout);
 
+      if (signal) {
+        if (signal.aborted) {
+          clearTimeout(timer);
+          reject(
+            new RequestCancelledError({
+              namespace,
+              action,
+              cause: signal.reason,
+            }),
+          );
+          return;
+        }
+        signal.addEventListener("abort", handleAbort, { once: true });
+      }
+
       this.pending.set(message.requestId, {
-        resolve: resolve as (value: unknown) => void,
-        reject,
+        resolve: (value: unknown) => {
+          cleanupSignal();
+          resolve(value as T);
+        },
+        reject: (error: Error) => {
+          cleanupSignal();
+          reject(error);
+        },
         timer,
         namespace,
         action,
         startedAt: Date.now(),
       });
 
-      this.sendOrFail(message, () => this.pending.delete(message.requestId));
+      this.sendOrFail(message, () => {
+        clearTimeout(timer);
+        cleanupSignal();
+        this.pending.delete(message.requestId);
+      });
     });
   }
 
