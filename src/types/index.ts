@@ -58,11 +58,21 @@ export type {
 } from "@lizuz/mini-app-types";
 export type { ChatSdkModule } from "./chat.types";
 export type {
+  AppearanceType,
+  PlatformTypeResponse,
+  PlatformTypes,
+} from "./common.types";
+export type {
+  Headers,
+  HttpBodyRequest,
   HttpDeleteParams,
   HttpGetParams,
   HttpPatchParams,
   HttpPostParams,
   HttpPutParams,
+  HttpQueryRequest,
+  HttpRequestBase,
+  Query,
 } from "./http.types";
 export type {
   HeartbeatOptions,

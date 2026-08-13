@@ -2,6 +2,7 @@ import { MiniAppSdk } from "./client";
 import { SdkError } from "./errors";
 import type { MiniAppSdkOptions } from "./types";
 
+export type { MiniAppSdkDependencies } from "./client";
 export { MiniAppSdk } from "./client";
 export {
   CONNECTION_EVENTS,
@@ -10,12 +11,26 @@ export {
   PLATFORM_EVENT_NAME,
   PROTOCOL_VERSION,
 } from "./constants";
-export type { SdkErrorCode } from "./errors";
+export type {
+  RequestCancelledErrorOptions,
+  SdkErrorCode,
+  SdkErrorOptions,
+} from "./errors";
 export { RequestCancelledError, SdkError } from "./errors";
 export type { ConsoleLoggerOptions, Logger } from "./logging";
 export { ConsoleLogger, NoopLogger } from "./logging";
-export type { AppearanceModuleHandle } from "./modules";
-export type { ActionMetrics, RpcMetricsSnapshot } from "./observability";
+export type { AppearanceModuleHandle, ModuleFactory } from "./modules";
+export type {
+  ActionMetrics,
+  DurationPercentiles,
+  RpcMetricsOptions,
+  RpcMetricsSnapshot,
+} from "./observability";
+export type {
+  MessageType,
+  PlatformError,
+  PlatformMessage,
+} from "./protocol";
 export type {
   RpcMiddleware,
   RpcMiddlewareContext,
@@ -23,12 +38,14 @@ export type {
   RpcRequestOptions,
 } from "./rpc";
 export { StreamBuilder } from "./stream";
+export type { Transport, TransportDebugInfo } from "./transport";
 export type {
   ApiRequestParams,
   ApiResult,
   ApiSdkModule,
   AppearanceSdkModule,
   AppearanceState,
+  AppearanceType,
   AuthSdkModule,
   ChatMessage,
   ChatSdkModule,
@@ -51,14 +68,18 @@ export type {
   Direction,
   EventHandler,
   FlagsSdkModule,
+  Headers,
   HeartbeatOptions,
   HostDescriptor,
+  HttpBodyRequest,
   HttpDeleteParams,
   HttpGetParams,
   HttpMethod,
   HttpPatchParams,
   HttpPostParams,
   HttpPutParams,
+  HttpQueryRequest,
+  HttpRequestBase,
   HttpResult,
   HttpSdkModule,
   LocaleState,
@@ -75,7 +96,10 @@ export type {
   PermissionsSdkModule,
   PlatformSdkModule,
   PlatformTypeLiteral,
+  PlatformTypeResponse,
+  PlatformTypes,
   PlatformUser,
+  Query,
   SdkDebug,
   SdkDebugSnapshot,
   SdkStatus,

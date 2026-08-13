@@ -10,12 +10,12 @@ import type {
   NavigationSdkModule,
   PermissionsSdkModule,
   PlatformSdkModule,
+  PlatformTypeLiteral,
 } from "@lizuz/mini-app-types";
-import type { RpcMetricsSnapshot } from "../observability";
+import type { RpcMetricsOptions, RpcMetricsSnapshot } from "../observability";
 import type { RpcClient, RpcMiddleware, RpcRequestOptions } from "../rpc";
 import type { TransportDebugInfo } from "../transport";
 import type { ChatSdkModule } from "./chat.types";
-import type { PlatformTypeLiteral } from "./common.types";
 import type { StorageSdkModule } from "./storage.types";
 
 /** A single request currently awaiting a host reply, for debug snapshots. */
@@ -162,6 +162,14 @@ export interface MiniAppSdkOptions {
    */
   devMode?: boolean;
   /**
+   * Enables the built-in `ConsoleLogger` (when no `logger` is injected via
+   * the constructor dependencies) at the given minimum level. Useful for
+   * on-boarding a vendor onto logging without custom wiring — the
+   * `ConsoleLogger` supports `redact` too, but a redaction set isn't
+   * configurable from options (construct a `ConsoleLogger` for that).
+   */
+  logLevel?: "debug" | "info" | "warn" | "error";
+  /**
    * Enables the optional heartbeat & reconnect: the SDK periodically pings
    * the host, and when `maxMissedPongs` go unanswered it emits
    * `connection.lost`, re-runs the handshake with backoff, then emits
@@ -169,4 +177,10 @@ export interface MiniAppSdkOptions {
    * answer `heartbeat.ping`.
    */
   heartbeat?: HeartbeatOptions;
+  /**
+   * Tuning for the request metrics recorder: the duration window used for
+   * latency percentiles, and an `onSnapshot` hook a host can use to persist
+   * metrics instead of polling `sdk.getMetrics()`.
+   */
+  metrics?: RpcMetricsOptions;
 }

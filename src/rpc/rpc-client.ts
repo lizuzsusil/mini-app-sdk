@@ -14,7 +14,7 @@ import {
 } from "../errors";
 import type { Logger } from "../logging";
 import { noopLogger } from "../logging";
-import type { RpcMetricsSnapshot } from "../observability";
+import type { RpcMetricsOptions, RpcMetricsSnapshot } from "../observability";
 import { MetricsRecorder } from "../observability";
 import type {
   HandshakeAckPayload,
@@ -60,6 +60,8 @@ export interface RpcClientOptions {
   devMode?: boolean;
   /** Enables the optional heartbeat & reconnect (see `HeartbeatOptions`). */
   heartbeat?: HeartbeatOptions;
+  /** Tuning for the request metrics recorder (percentile window, export hook). */
+  metrics?: RpcMetricsOptions;
 }
 
 interface PendingRequest {
@@ -114,7 +116,7 @@ export class RpcClient {
   private readonly eventHandlers = new Map<string, Set<EventHandler>>();
   private readonly streamConsumers = new Map<string, StreamBuilder>();
   private readonly middlewares: RpcMiddleware[] = [];
-  private readonly metricsRecorder = new MetricsRecorder();
+  private readonly metricsRecorder: MetricsRecorder;
   private readonly warnedUnavailableCapabilities = new Set<string>();
   private readonly traceId: string;
   private started = false;
@@ -150,6 +152,7 @@ export class RpcClient {
     this.logger = options.logger ?? noopLogger;
     this.devMode = options.devMode ?? false;
     this.heartbeatOptions = options.heartbeat ?? null;
+    this.metricsRecorder = new MetricsRecorder(options.metrics);
     this.traceId = generateId();
   }
 

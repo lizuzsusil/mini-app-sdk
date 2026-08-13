@@ -137,7 +137,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.miniAppId = options.miniAppId;
     const devMode = MiniAppSdk.resolveDevMode(options);
     this.logger =
-      dependencies.logger ?? (devMode ? new ConsoleLogger() : noopLogger);
+      dependencies.logger ??
+      (options.logLevel !== undefined || devMode
+        ? new ConsoleLogger({ minLevel: options.logLevel })
+        : noopLogger);
 
     this.hostDescriptor =
       typeof window !== "undefined"
@@ -161,6 +164,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       logger: this.logger,
       devMode,
       heartbeat: options.heartbeat,
+      metrics: options.metrics,
     });
     this.traceId = this.rpc.getTraceId();
 
@@ -394,7 +398,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     return this.rpc.onEvent(event, handler);
   }
 
-  /** @inheritdoc */
+  /** {@inheritdoc} */
   request<T>(
     namespace: string,
     action: string,
@@ -404,7 +408,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     return this.rpc.request<T>(namespace, action, payload, options);
   }
 
-  /** @inheritdoc */
+  /** {@inheritdoc} */
   emit(event: string, data?: unknown): void {
     this.rpc
       .request(NAMESPACES.EVENT, ACTIONS.EVENT.EMIT, { event, data })

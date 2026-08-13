@@ -16,13 +16,39 @@ Legend:
 
 Implemented:
 
+- **1.1 Request cancellation via `AbortSignal`** — `RpcClient.request(…, { signal })`
+  rejects an in-flight request (including pending retry backoff) with
+  `RequestCancelledError`; exposed to mini apps via the `sdk.request(namespace,
+  action, payload, { signal })` escape hatch (`src/rpc/rpc-client.ts`,
+  `src/errors/request-cancelled-error.ts`).
+- **1.2 Reconnection & heartbeat** — opt-in `heartbeat: { intervalMs, timeoutMs,
+  maxMissedPongs }` pings the host on an interval; N unanswered pongs emit
+  `connection.lost`, re-run the handshake with backoff, and emit
+  `connection.established` (`src/rpc/rpc-client.ts`,
+  `src/constants/namespaces.constants.ts`, `src/types/sdk.types.ts`).
+- **2.1 Metrics: percentiles, windowing, export hooks** — `RpcMetricsOptions`
+  (`maxDurationEntries`, `durationsWindowMs`, `onSnapshot`) adds p50/p95/p99
+  latency percentiles to `ActionMetrics` and the snapshot, with a bounded
+  duration window per action and a push-based snapshot hook
+  (`src/observability/metrics-recorder.ts`, `src/observability/metrics.types.ts`,
+  `src/rpc/rpc-client.ts`).
 - **2.2 Debug snapshot** — `sdk.debug.snapshot()` returning a serializable view
   of the instance (`src/client/MiniAppSdk.ts`, `src/rpc/rpc-client.ts`).
 - **2.3 Dev-mode capability warnings** — `MiniAppSdkOptions.devMode` plus a
   one-per-`namespace.action` warning when a request targets a domain namespace
   the host didn't negotiate (`src/rpc/rpc-client.ts`).
+- **2.4 Logging: redaction and level from options** — `ConsoleLogger` gains a
+  `redact` option (`Set<string>` or predicate) that masks sensitive context
+  keys, and `MiniAppSdkOptions.logLevel` wires up the built-in `ConsoleLogger`
+  without custom dependencies (`src/logging/console-logger.ts`,
+  `src/types/sdk.types.ts`, `src/client/MiniAppSdk.ts`).
 - **3.1 Storage: JSON values, TTL, scoped keys** — `getJson`/`setJson`,
   `ttlMs` option, and `scoped(prefix)` (`src/modules/storage.module.ts`).
+- **4.1 Breaking-change detection (API extractor)** — `@microsoft/api-extractor`
+  emits `etc/sewa-sdk.api.md` and rolls up `dist/sewa-sdk.d.ts` (the `types`
+  field now finally ships); `api:report` regenerates the report, and `build` /
+  CI `api:check` fail on unintended public-API changes
+  (`api-extractor.json`, `tsconfig.api.json`, `package.json`).
 - **4.2 CI pipeline** — `.github/workflows/ci.yml` (checks) and
   `publish.yml` (tag-triggered npm publish).
 
@@ -33,6 +59,19 @@ Side fixes made while landing 4.2 (a green pipeline needs a green suite):
   `src/observability/metrics-recorder.test.ts`.
 - `pnpm-lock.yaml` re-synced (removed `release-please`, which had already been
   dropped from `package.json`).
+
+Side fixes made while landing 4.1 (api-extractor needs a well-formed surface):
+
+- `@inheritdoc` → `{@inheritdoc}` in `src/client/MiniAppSdk.ts` (TSDoc inline
+  tag syntax).
+- `SdkDebugSnapshot.platformType` now uses the `@lizuz/mini-app-types`
+  `PlatformTypeLiteral` instead of the duplicate local copy in
+  `src/types/common.types.ts`.
+- New root exports so every type referenced by a public signature resolves:
+  `PlatformMessage`, `MessageType`, `PlatformError`, `Transport`,
+  `TransportDebugInfo`, `Headers`, `Query`, the HTTP base request types,
+  `MiniAppSdkDependencies`, `ModuleFactory`, `RequestCancelledErrorOptions`,
+  `SdkErrorOptions`, and `AppearanceType`/`PlatformTypes`/`PlatformTypeResponse`.
 
 ---
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { HOST_TARGET } from "../constants";
 import { SdkError } from "../errors";
 import type { PlatformMessage } from "../protocol";
@@ -309,5 +309,81 @@ describe("MiniAppSdk", () => {
     sdk.destroy();
 
     expect(sdk.debug.snapshot().status).toBe("destroyed");
+  });
+
+  it("enables the built-in ConsoleLogger when logLevel is set", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk(
+      { miniAppId: "my-mini-app", devMode: false, logLevel: "info" },
+      { transport },
+    );
+
+    await sdk.initialize();
+    expect(infoSpy).toHaveBeenCalled();
+    infoSpy.mockRestore();
+  });
+
+  it("stays silent on console when no logger, logLevel, or devMode is set", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk(
+      { miniAppId: "my-mini-app", devMode: false },
+      { transport },
+    );
+
+    await sdk.initialize();
+    expect(infoSpy).not.toHaveBeenCalled();
+    infoSpy.mockRestore();
+  });
+
+  it("invokes the metrics export hook on every getMetrics() snapshot", async () => {
+    const onSnapshot = vi.fn();
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk(
+      { miniAppId: "my-mini-app", metrics: { onSnapshot } },
+      { transport },
+    );
+    await sdk.initialize();
+
+    sdk.getMetrics();
+    expect(onSnapshot).toHaveBeenCalledTimes(1);
+    expect(onSnapshot.mock.calls[0][0]).toMatchObject({
+      totalRequests: expect.any(Number),
+      percentiles: {
+        p50Ms: expect.any(Number),
+        p95Ms: expect.any(Number),
+        p99Ms: expect.any(Number),
+      },
+    });
+  });
+
+  it("reports latency percentiles in the metrics snapshot", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    const userPromise = sdk.auth.getUser();
+    const request = transport.sent[transport.sent.length - 1]!;
+    transport.reply(request, {
+      id: "u1",
+      name: "Ada",
+      email: "ada@example.com",
+      roles: [],
+      permissions: [],
+    });
+    await userPromise;
+
+    const metrics = sdk.getMetrics();
+    expect(metrics.byAction["auth.getUser"]!.percentiles).toMatchObject({
+      p50Ms: expect.any(Number),
+      p95Ms: expect.any(Number),
+      p99Ms: expect.any(Number),
+    });
+    expect(metrics.percentiles).toMatchObject({
+      p50Ms: expect.any(Number),
+      p95Ms: expect.any(Number),
+      p99Ms: expect.any(Number),
+    });
   });
 });

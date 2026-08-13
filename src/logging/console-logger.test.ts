@@ -54,4 +54,45 @@ describe("ConsoleLogger", () => {
 
     expect(spy).toHaveBeenCalledWith("[MiniAppSdk] hi", { userId: "123" });
   });
+
+  it("redacts matching context keys via a Set", () => {
+    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const logger = new ConsoleLogger({
+      redact: new Set(["token", "password"]),
+    });
+
+    logger.info("hi", { token: "secret", userId: "123" });
+
+    expect(spy).toHaveBeenCalledWith("[MiniAppSdk] hi", {
+      token: "[REDACTED]",
+      userId: "123",
+    });
+  });
+
+  it("redacts context keys via a predicate", () => {
+    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const logger = new ConsoleLogger({
+      redact: (key, value) => key === "secret" || value === "super-sensitive",
+    });
+
+    logger.info("hi", { secret: "a", name: "b", note: "super-sensitive" });
+
+    expect(spy).toHaveBeenCalledWith("[MiniAppSdk] hi", {
+      secret: "[REDACTED]",
+      name: "b",
+      note: "[REDACTED]",
+    });
+  });
+
+  it("leaves context untouched when nothing matches the redaction set", () => {
+    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const logger = new ConsoleLogger({ redact: new Set(["token"]) });
+
+    const context = { userId: "123" };
+    logger.info("hi", context);
+
+    expect(spy).toHaveBeenCalledWith("[MiniAppSdk] hi", context);
+    // The same object is passed through, not a copy.
+    expect(spy.mock.calls[0][1]).toBe(context);
+  });
 });

@@ -7,7 +7,7 @@ export type EventHandler<TPayload = unknown> = (payload: TPayload) => void;
 export type PlatformTypeLiteral = "flutter" | "web";
 
 /** Alias kept for hosts/consumers that spell the platform union as `PlatformTypes`. */
-export type PlatformTypes = PlatformTypeLiteral;
+export type PlatformTypes = "flutter" | "web";
 
 /**
  * The appearance hint a host attaches to its `platform.getType` reply, so a
