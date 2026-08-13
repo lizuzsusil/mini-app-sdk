@@ -21,7 +21,8 @@ import {
   majorVersionsMatch,
 } from "../protocol";
 import { StreamBuilder } from "../stream";
-import type { Transport } from "../transport";
+import type { Transport, TransportDebugInfo } from "../transport";
+import type { PendingRequestInfo } from "../types";
 import { computeBackoffMs, delay, generateId } from "../utils";
 import type { RpcMiddleware } from "./middleware";
 import { composeMiddleware } from "./middleware";
@@ -35,6 +36,12 @@ export interface RpcClientOptions {
   retryDelayMs?: number;
   maxRetryDelayMs?: number;
   logger?: Logger;
+  /**
+   * When true, warns once per `namespace.action` about requests to domain
+   * namespaces the host did not negotiate during the handshake. No-op when
+   * false (production). Defaults to false.
+   */
+  devMode?: boolean;
 }
 
 interface PendingRequest {
@@ -43,6 +50,8 @@ interface PendingRequest {
   timer: ReturnType<typeof setTimeout>;
   namespace: string;
   action: string;
+  /** `Date.now()` when the request was dispatched, for debug snapshots. */
+  startedAt: number;
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -76,6 +85,7 @@ export class RpcClient {
   private readonly retryDelayMs: number;
   private readonly maxRetryDelayMs: number;
   private readonly logger: Logger;
+  private readonly devMode: boolean;
   private readonly transport: Transport;
 
   private readonly pending = new Map<string, PendingRequest>();
@@ -83,6 +93,7 @@ export class RpcClient {
   private readonly streamConsumers = new Map<string, StreamBuilder>();
   private readonly middlewares: RpcMiddleware[] = [];
   private readonly metricsRecorder = new MetricsRecorder();
+  private readonly warnedUnavailableCapabilities = new Set<string>();
   private readonly traceId: string;
   private started = false;
 
@@ -105,6 +116,7 @@ export class RpcClient {
     this.maxRetryDelayMs =
       options.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS;
     this.logger = options.logger ?? noopLogger;
+    this.devMode = options.devMode ?? false;
     this.traceId = generateId();
   }
 
@@ -204,6 +216,7 @@ export class RpcClient {
         timer,
         namespace: NAMESPACES.HANDSHAKE,
         action: ACTIONS.HANDSHAKE.CONNECT,
+        startedAt: Date.now(),
       });
 
       this.sendOrFail(message, () => this.pending.delete(message.requestId));
@@ -232,10 +245,32 @@ export class RpcClient {
     action: string,
     payload?: unknown,
   ): Promise<T> {
+    this.warnOnUnavailableCapability(namespace, action);
     return composeMiddleware<T>(
       this.middlewares,
       { namespace, action, payload, attempt: 0 },
       () => this.executeWithRetry<T>(namespace, action, payload),
+    );
+  }
+
+  /**
+   * Dev-mode helper: once the handshake has completed, warn once per
+   * `namespace.action` when the namespace is a domain capability this SDK
+   * advertises but the host did not negotiate. Protocol-level namespaces
+   * (`event`, `handshake`) are excluded — hosts never negotiate them, so a
+   * warning would be noise. A no-op when `devMode` is off.
+   */
+  private warnOnUnavailableCapability(namespace: string, action: string): void {
+    if (!this.devMode) return;
+    if (!this.negotiatedCapabilities) return;
+    if (!SDK_CAPABILITIES.includes(namespace)) return;
+    if (this.negotiatedCapabilities.includes(namespace)) return;
+
+    const key = `${namespace}.${action}`;
+    if (this.warnedUnavailableCapabilities.has(key)) return;
+    this.warnedUnavailableCapabilities.add(key);
+    this.logger.warn(
+      `[dev] "${key}" requires the "${namespace}" capability, but the host did not negotiate it — the request will likely fail`,
     );
   }
 
@@ -415,6 +450,34 @@ export class RpcClient {
     return this.metricsRecorder.snapshot();
   }
 
+  /**
+   * A read-only view of every request currently awaiting a host reply, for
+   * `MiniAppSdk.debug.snapshot()`.
+   */
+  getPendingRequests(): PendingRequestInfo[] {
+    const now = Date.now();
+    const result: PendingRequestInfo[] = [];
+    for (const [requestId, request] of this.pending) {
+      result.push({
+        requestId,
+        namespace: request.namespace,
+        action: request.action,
+        elapsedMs: now - request.startedAt,
+      });
+    }
+    return result;
+  }
+
+  /** The SDK build version reported to the host during the handshake. */
+  getSdkVersion(): string {
+    return RPC_CLIENT_SDK_VERSION;
+  }
+
+  /** Debug-time view of the transport, for `MiniAppSdk.debug.snapshot()`. */
+  getTransportDebugInfo(): TransportDebugInfo {
+    return this.transport.getDebugInfo?.() ?? { started: this.started };
+  }
+
   private completeHandshake(
     ackPayload: unknown,
     resolvePromise: () => void,
@@ -496,6 +559,7 @@ export class RpcClient {
         timer,
         namespace,
         action,
+        startedAt: Date.now(),
       });
 
       this.sendOrFail(message, () => this.pending.delete(message.requestId));

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { ACTIONS, HOST_TARGET, NAMESPACES } from "../constants";
 import { HandshakeError, ProtocolError, TimeoutError } from "../errors";
+import type { Logger } from "../logging";
+import type { PlatformMessage } from "../protocol";
 import { createMessage } from "../protocol";
 import { FakeTransport } from "../testing";
 import { RpcClient } from "./rpc-client";
@@ -199,7 +201,7 @@ describe("RpcClient", () => {
       protocolVersion: string;
       capabilities: string[];
     };
-    expect(payload.protocolVersion).toBe("3.0.0");
+    expect(payload.protocolVersion).toBe("1.0.0");
     expect(payload.capabilities).toContain("auth");
     expect(payload.capabilities).toContain("http");
   });
@@ -220,7 +222,7 @@ describe("RpcClient", () => {
         "test-mini-app",
         {
           status: "ok",
-          protocolVersion: "3.0.0",
+          protocolVersion: "1.0.0",
           capabilities: ["auth", "http"],
         },
         { requestId: sent.requestId, traceId: sent.traceId },
@@ -291,7 +293,7 @@ describe("RpcClient", () => {
         sent.action,
         HOST_TARGET,
         "test-mini-app",
-        { status: "ok", protocolVersion: "3.9.2" },
+        { status: "ok", protocolVersion: "1.9.2" },
         { requestId: sent.requestId, traceId: sent.traceId },
       ),
     );
@@ -400,6 +402,169 @@ describe("RpcClient", () => {
     client.stop();
 
     await expect(promise).rejects.toBeInstanceOf(ProtocolError);
+  });
+});
+
+describe("RpcClient debug introspection", () => {
+  it("reports in-flight requests via getPendingRequests", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 5000 });
+    client.start();
+
+    const promise = client.request(NAMESPACES.AUTH, ACTIONS.AUTH.GET_USER);
+    const sent = transport.lastSent!;
+
+    const pending = client.getPendingRequests();
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({
+      requestId: sent.requestId,
+      namespace: "auth",
+      action: "getUser",
+    });
+    expect(pending[0].elapsedMs).toBeGreaterThanOrEqual(0);
+
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        { id: "u1" },
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+    await promise;
+    expect(client.getPendingRequests()).toHaveLength(0);
+  });
+
+  it("exposes the SDK version and transport debug info", () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    expect(client.getSdkVersion()).toBe("3.0.0");
+    expect(client.getTransportDebugInfo().started).toBe(false);
+
+    client.start();
+    expect(client.getTransportDebugInfo().started).toBe(true);
+  });
+});
+
+describe("RpcClient dev-mode capability warnings", () => {
+  function loggerSpy() {
+    return {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    } as unknown as Logger;
+  }
+
+  async function handshakeWithCapabilities(
+    transport: FakeTransport,
+    client: RpcClient,
+    capabilities: string[],
+  ): Promise<void> {
+    const promise = client.handshake();
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "handshake",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        { status: "ok", capabilities },
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+    await promise;
+  }
+
+  function resolveRequest(
+    transport: FakeTransport,
+    sent: PlatformMessage,
+    promise: Promise<unknown>,
+  ): Promise<unknown> {
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        undefined,
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+    return promise;
+  }
+
+  it("warns once when a request targets a namespace the host did not negotiate", async () => {
+    const transport = new FakeTransport();
+    const logger = loggerSpy();
+    const client = new RpcClient(transport, {
+      miniAppId: "test-mini-app",
+      timeout: 5000,
+      devMode: true,
+      logger,
+    });
+    client.start();
+    await handshakeWithCapabilities(transport, client, ["auth"]);
+
+    const p1 = client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION);
+    const sent1 = transport.lastSent!;
+    const p2 = client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION);
+    const sent2 = transport.lastSent!;
+
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("device.location"),
+    );
+
+    await resolveRequest(transport, sent1, p1);
+    await resolveRequest(transport, sent2, p2);
+  });
+
+  it("does not warn for negotiated or protocol-level namespaces", async () => {
+    const transport = new FakeTransport();
+    const logger = loggerSpy();
+    const client = new RpcClient(transport, {
+      miniAppId: "test-mini-app",
+      timeout: 5000,
+      devMode: true,
+      logger,
+    });
+    client.start();
+    await handshakeWithCapabilities(transport, client, ["auth"]);
+
+    const p1 = client.request(NAMESPACES.AUTH, ACTIONS.AUTH.GET_USER);
+    const sent1 = transport.lastSent!;
+    const p2 = client.request(NAMESPACES.EVENT, ACTIONS.EVENT.SUBSCRIBE);
+    const sent2 = transport.lastSent!;
+
+    expect(logger.warn).not.toHaveBeenCalled();
+
+    await resolveRequest(transport, sent1, p1);
+    await resolveRequest(transport, sent2, p2);
+  });
+
+  it("does not warn when devMode is off", async () => {
+    const transport = new FakeTransport();
+    const logger = loggerSpy();
+    const client = new RpcClient(transport, {
+      miniAppId: "test-mini-app",
+      timeout: 5000,
+      devMode: false,
+      logger,
+    });
+    client.start();
+    await handshakeWithCapabilities(transport, client, ["auth"]);
+
+    const p = client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION);
+    const sent = transport.lastSent!;
+    expect(logger.warn).not.toHaveBeenCalled();
+
+    await resolveRequest(transport, sent, p);
   });
 });
 

@@ -36,4 +36,18 @@ export interface Transport {
    * transport's.
    */
   send(message: PlatformMessage): void;
+
+  /**
+   * Optional introspection used by `MiniAppSdk.debug.snapshot()`. A
+   * transport that has nothing to report (or doesn't want to) may omit it.
+   */
+  getDebugInfo?(): TransportDebugInfo;
+}
+
+/** Debug-time view of a transport, for `MiniAppSdk.debug.snapshot()`. */
+export interface TransportDebugInfo {
+  /** Whether the transport is currently listening for inbound messages. */
+  started: boolean;
+  /** The origin outbound messages are pinned to, when known. */
+  pinnedOrigin?: string | null;
 }

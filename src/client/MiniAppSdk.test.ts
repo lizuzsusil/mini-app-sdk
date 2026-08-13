@@ -40,6 +40,19 @@ class ScriptedTransport implements Transport {
       this.reply(message, this.platformType);
       return;
     }
+    if (message.namespace === "appearance") {
+      this.reply(
+        message,
+        message.action === "getLocale"
+          ? { locale: "en", language: "en", direction: "ltr" }
+          : { preference: "light", mode: "light" },
+      );
+      return;
+    }
+    if (message.namespace === "event" && message.action === "subscribe") {
+      this.reply(message, undefined);
+      return;
+    }
     // Every other request is left pending; the test drives the response.
   }
 
@@ -239,5 +252,62 @@ describe("MiniAppSdk", () => {
     await sdk.initialize();
 
     expect(sdk.getModule("does-not-exist")).toBeUndefined();
+  });
+
+  it("debug.snapshot() reports a serializable view of the instance", async () => {
+    const transport = new ScriptedTransport("web");
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    const snapshot = sdk.debug.snapshot();
+    expect(snapshot).toMatchObject({
+      miniAppId: "my-mini-app",
+      protocolVersion: "1.0.0",
+      platformType: "web",
+      status: "ready",
+    });
+    expect(snapshot.sdkVersion).toBeTruthy();
+    expect(snapshot.traceId).toBe(sdk.traceId);
+    expect(snapshot.capabilities).toEqual(expect.any(Array));
+    expect(snapshot.transport).toMatchObject({ started: true });
+    expect(snapshot.pendingRequests).toEqual([]);
+    expect(snapshot.registeredModules).toContain("auth");
+    expect(snapshot.registeredModules).toContain("http");
+  });
+
+  it("debug.snapshot() reflects an in-flight request", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    const userPromise = sdk.auth.getUser();
+    const snapshot = sdk.debug.snapshot();
+    expect(snapshot.pendingRequests).toHaveLength(1);
+    expect(snapshot.pendingRequests[0]).toMatchObject({
+      namespace: "auth",
+      action: "getUser",
+    });
+    expect(snapshot.pendingRequests[0].elapsedMs).toBeGreaterThanOrEqual(0);
+
+    const request = transport.sent[transport.sent.length - 1]!;
+    transport.reply(request, {
+      id: "u1",
+      name: "Ada",
+      email: "ada@example.com",
+      roles: [],
+      permissions: [],
+    });
+    await userPromise;
+
+    expect(sdk.debug.snapshot().pendingRequests).toHaveLength(0);
+  });
+
+  it("debug.snapshot() reports the destroyed status after destroy()", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+    sdk.destroy();
+
+    expect(sdk.debug.snapshot().status).toBe("destroyed");
   });
 });

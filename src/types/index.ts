@@ -50,7 +50,6 @@ export type {
   PlatformSdkModule,
   PlatformTypeLiteral,
   PlatformUser,
-  StorageSdkModule,
   StreamChunk,
   StreamError,
   ThemeMode,
@@ -65,4 +64,15 @@ export type {
   HttpPostParams,
   HttpPutParams,
 } from "./http.types";
-export type { MiniAppSdkInterface, MiniAppSdkOptions } from "./sdk.types";
+export type {
+  MiniAppSdkInterface,
+  MiniAppSdkOptions,
+  PendingRequestInfo,
+  SdkDebug,
+  SdkDebugSnapshot,
+  SdkStatus,
+} from "./sdk.types";
+export type {
+  StorageSdkModule,
+  StorageSetOptions,
+} from "./storage.types";

@@ -7,7 +7,7 @@ import {
 } from "../constants";
 import { SdkError } from "../errors";
 import type { Logger } from "../logging";
-import { noopLogger } from "../logging";
+import { ConsoleLogger, noopLogger } from "../logging";
 import type {
   AppearanceModuleHandle,
   ModuleFactory,
@@ -51,6 +51,8 @@ import type {
   PermissionsSdkModule,
   PlatformSdkModule,
   PlatformTypeLiteral,
+  SdkDebug,
+  SdkDebugSnapshot,
   StorageSdkModule,
 } from "../types";
 import type {
@@ -113,6 +115,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly http: HttpSdkModule;
   readonly ai: ChatSdkModule;
   readonly appearance: AppearanceSdkModule;
+  readonly debug: SdkDebug;
 
   private readonly rpc: RpcClient;
   private readonly logger: Logger;
@@ -132,7 +135,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     dependencies: MiniAppSdkDependencies = {},
   ) {
     this.miniAppId = options.miniAppId;
-    this.logger = dependencies.logger ?? noopLogger;
+    const devMode = MiniAppSdk.resolveDevMode(options);
+    this.logger =
+      dependencies.logger ?? (devMode ? new ConsoleLogger() : noopLogger);
 
     this.hostDescriptor =
       typeof window !== "undefined"
@@ -154,6 +159,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       retryDelayMs: options.retryDelayMs,
       maxRetryDelayMs: options.maxRetryDelayMs,
       logger: this.logger,
+      devMode,
     });
     this.traceId = this.rpc.getTraceId();
 
@@ -196,9 +202,44 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.appearanceHandle = createAppearanceModule(this.rpc);
     this.appearance = this.appearanceHandle.module;
 
+    this.debug = {
+      snapshot: (): SdkDebugSnapshot => ({
+        sdkVersion: this.rpc.getSdkVersion(),
+        protocolVersion: this.version,
+        miniAppId: this.miniAppId,
+        traceId: this.traceId,
+        platformType: this.platform.type,
+        capabilities: this.capabilities,
+        status: this.destroyed
+          ? "destroyed"
+          : this.initialized
+            ? "ready"
+            : "initializing",
+        transport: this.rpc.getTransportDebugInfo(),
+        metrics: this.getMetrics(),
+        pendingRequests: this.rpc.getPendingRequests(),
+        registeredModules: this.registry.list(),
+      }),
+    };
+
     if (typeof globalThis !== "undefined") {
       (globalThis as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY] = this;
     }
+  }
+
+  /**
+   * Resolves whether dev-mode warnings/logging should be enabled. An explicit
+   * `options.devMode` always wins; otherwise it's inferred from the bundle's
+   * `NODE_ENV`, defaulting to off when the environment variable is absent.
+   */
+  private static resolveDevMode(options: MiniAppSdkOptions): boolean {
+    if (options.devMode !== undefined) return options.devMode;
+    const env = (
+      globalThis as unknown as {
+        process?: { env?: Record<string, string | undefined> };
+      }
+    ).process?.env;
+    return env?.NODE_ENV !== undefined && env.NODE_ENV !== "production";
   }
 
   /**

@@ -10,11 +10,57 @@ import type {
   NavigationSdkModule,
   PermissionsSdkModule,
   PlatformSdkModule,
-  StorageSdkModule,
 } from "@lizuz/mini-app-types";
 import type { RpcMetricsSnapshot } from "../observability";
 import type { RpcClient, RpcMiddleware } from "../rpc";
+import type { TransportDebugInfo } from "../transport";
 import type { ChatSdkModule } from "./chat.types";
+import type { PlatformTypeLiteral } from "./common.types";
+import type { StorageSdkModule } from "./storage.types";
+
+/** A single request currently awaiting a host reply, for debug snapshots. */
+export interface PendingRequestInfo {
+  requestId: string;
+  namespace: string;
+  action: string;
+  /** Milliseconds since the request was dispatched. */
+  elapsedMs: number;
+}
+
+/** Runtime status of the SDK instance, for debug snapshots. */
+export type SdkStatus = "initializing" | "ready" | "destroyed";
+
+/** A one-shot, fully serializable view of an SDK instance's runtime state. */
+export interface SdkDebugSnapshot {
+  /** The SDK build version reported to the host during the handshake. */
+  sdkVersion: string;
+  /** The wire protocol version this build speaks. */
+  protocolVersion: string;
+  miniAppId: string;
+  traceId: string;
+  platformType: PlatformTypeLiteral;
+  /** Namespaces the host confirmed support for; empty until `initialize()` resolves. */
+  capabilities: readonly string[];
+  status: SdkStatus;
+  /** Debug-time view of the transport (origin pinning, started flag). */
+  transport: TransportDebugInfo;
+  /** Request counts, timings, failures, timeouts, and retries. */
+  metrics: RpcMetricsSnapshot;
+  /** Requests dispatched but not yet answered by the host. */
+  pendingRequests: PendingRequestInfo[];
+  /** Names of every module (built-in or registered) that has been built. */
+  registeredModules: string[];
+}
+
+/** The `sdk.debug` surface: runtime introspection for support and tooling. */
+export interface SdkDebug {
+  /**
+   * A one-shot, fully serializable snapshot of the instance's runtime
+   * state — version, platform, capabilities, metrics, in-flight requests,
+   * and registered modules. Paste-able into a support ticket or dev tools.
+   */
+  snapshot(): SdkDebugSnapshot;
+}
 
 /**
  * The full public shape of a `MiniAppSdk` instance — this is the contract
@@ -47,6 +93,8 @@ export interface MiniAppSdkInterface {
   api: ApiSdkModule;
   http: HttpSdkModule;
   ai: ChatSdkModule;
+  /** Runtime introspection: `debug.snapshot()` returns a serializable view of this instance. */
+  readonly debug: SdkDebug;
 
   initialize(): Promise<void>;
   destroy(): void;
@@ -80,4 +128,11 @@ export interface MiniAppSdkOptions {
   maxRetryDelayMs?: number;
   /** Origin to pin for postMessage. Mapped to `allowedOrigin` internally. */
   targetOrigin?: string;
+  /**
+   * When true, the SDK warns once per `namespace.action` when a request goes
+   * to a domain namespace the host did not negotiate, and enables a
+   * `ConsoleLogger` if no logger was injected. Defaults to the value of
+   * `process.env.NODE_ENV !== "production"` (auto-detect).
+   */
+  devMode?: boolean;
 }

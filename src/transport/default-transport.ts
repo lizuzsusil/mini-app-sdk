@@ -4,7 +4,7 @@ import type { Logger } from "../logging";
 import { noopLogger } from "../logging";
 import type { PlatformMessage } from "../protocol";
 import { isValidPlatformMessage } from "../protocol";
-import type { Transport } from "./transport";
+import type { Transport, TransportDebugInfo } from "./transport";
 
 export interface DefaultTransportOptions {
   logger?: Logger;
@@ -44,6 +44,7 @@ export class DefaultTransport implements Transport {
   private readonly logger: Logger;
   private messageListener: ((event: MessageEvent) => void) | null = null;
   private customEventListener: ((event: Event) => void) | null = null;
+  private started = false;
 
   /** The origin outbound messages are sent to, and inbound messages are checked against once set. */
   private pinnedOrigin: string | null;
@@ -90,6 +91,7 @@ export class DefaultTransport implements Transport {
     this.logger.debug("DefaultTransport started", {
       allowedOrigin: this.pinnedOrigin ?? "(learned on first message)",
     });
+    this.started = true;
   }
 
   stop(): void {
@@ -104,7 +106,15 @@ export class DefaultTransport implements Transport {
       this.customEventListener = null;
     }
 
+    this.started = false;
     this.logger.debug("DefaultTransport stopped");
+  }
+
+  getDebugInfo(): TransportDebugInfo {
+    return {
+      started: this.started,
+      pinnedOrigin: this.pinnedOrigin,
+    };
   }
 
   send(message: PlatformMessage): void {

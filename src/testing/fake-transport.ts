@@ -1,5 +1,5 @@
 import type { PlatformMessage } from "../protocol";
-import type { Transport } from "../transport";
+import type { Transport, TransportDebugInfo } from "../transport";
 
 /**
  * An in-memory `Transport` implementation for unit tests. Records every
@@ -55,5 +55,12 @@ export class FakeTransport implements Transport {
   /** Test helper: the most recently sent message, if any. */
   get lastSent(): PlatformMessage | undefined {
     return this.sent[this.sent.length - 1];
+  }
+
+  getDebugInfo(): TransportDebugInfo {
+    return {
+      started: this.started,
+      pinnedOrigin: null,
+    };
   }
 }
