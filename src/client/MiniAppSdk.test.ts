@@ -71,6 +71,19 @@ class ScriptedTransport implements Transport {
     );
     queueMicrotask(() => this.onMessage?.(response));
   }
+
+  /** Test helper: deliver a host-published event synchronously. */
+  deliverEvent(namespace: string, action: string, payload: unknown): void {
+    const event = createMessage(
+      "event",
+      namespace,
+      action,
+      HOST_TARGET,
+      "my-mini-app",
+      payload,
+    );
+    this.onMessage?.(event);
+  }
 }
 
 describe("MiniAppSdk", () => {
@@ -385,5 +398,70 @@ describe("MiniAppSdk", () => {
       p95Ms: expect.any(Number),
       p99Ms: expect.any(Number),
     });
+  });
+
+  it("feature-detects device capabilities via isSupported", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    // The scripted host reports no capabilities, so the SDK assumes full
+    // support — the device namespace counts as negotiated.
+    expect(sdk.device.isSupported("location")).toBe(true);
+    expect(sdk.device.isSupported("biometric")).toBe(true);
+  });
+
+  it("reports isSupported false before initialize() resolves", () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+
+    expect(sdk.device.isSupported("location")).toBe(false);
+  });
+
+  it("emits a typed event to the host event bus", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    sdk.emit("navigation.route.changed", {
+      previous: "/a",
+      current: "/b",
+      canGoBack: true,
+    });
+
+    const sent = transport.sent[transport.sent.length - 1]!;
+    expect(sent.namespace).toBe("event");
+    expect(sent.action).toBe("emit");
+    expect(sent.payload).toEqual({
+      event: "navigation.route.changed",
+      data: { previous: "/a", current: "/b", canGoBack: true },
+    });
+  });
+
+  it("replays buffered events to a late sdk.on(..., { replay: true }) subscriber", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    sdk.on("appearance.theme.changed", () => {});
+    transport.deliverEvent("appearance", "theme.changed", "dark");
+    transport.deliverEvent("appearance", "theme.changed", "light");
+
+    const late = vi.fn();
+    sdk.on("appearance.theme.changed", late, { replay: true });
+    expect(late.mock.calls.map((call) => call[0])).toEqual(["dark", "light"]);
+  });
+
+  it("does not replay buffered events without the replay option", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    sdk.on("appearance.theme.changed", () => {});
+    transport.deliverEvent("appearance", "theme.changed", "dark");
+
+    const late = vi.fn();
+    sdk.on("appearance.theme.changed", late);
+    expect(late).not.toHaveBeenCalled();
   });
 });

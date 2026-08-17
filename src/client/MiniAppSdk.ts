@@ -40,7 +40,7 @@ import type {
   AuthSdkModule,
   ChatSdkModule,
   ConfigSdkModule,
-  DeviceSdkModule,
+  DeviceSdkModuleWithGuards,
   EventHandler,
   FlagsSdkModule,
   HostDescriptor,
@@ -56,8 +56,9 @@ import type {
   StorageSdkModule,
 } from "../types";
 import type {
-  AppearanceType,
+  OnEventOptions,
   PlatformTypeResponse,
+  SdkEventMap,
 } from "../types/common.types";
 import { delay } from "../utils";
 
@@ -111,7 +112,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly api: ApiSdkModule;
   readonly storage: StorageSdkModule;
   readonly platform: PlatformSdkModule;
-  readonly device: DeviceSdkModule;
+  readonly device: DeviceSdkModuleWithGuards;
   readonly http: HttpSdkModule;
   readonly ai: ChatSdkModule;
   readonly appearance: AppearanceSdkModule;
@@ -195,7 +196,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       NAMESPACES.NAVIGATION,
     );
     this.storage = this.requireModule<StorageSdkModule>(NAMESPACES.STORAGE);
-    this.device = this.requireModule<DeviceSdkModule>(NAMESPACES.DEVICE);
+    this.device = this.requireModule<DeviceSdkModuleWithGuards>(
+      NAMESPACES.DEVICE,
+    );
     this.api = this.requireModule<ApiSdkModule>(NAMESPACES.API);
     this.http = this.requireModule<HttpSdkModule>(NAMESPACES.HTTP);
     this.ai = this.requireModule<ChatSdkModule>(NAMESPACES.AI);
@@ -339,14 +342,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private subscribeToAppearanceEvents(): void {
     this.appearanceUnsubscribers.push(
       this.on(APPEARANCE_EVENTS.LOCALE_CHANGED, (payload) => {
-        this.appearanceHandle.applyHint({
-          locale: payload as AppearanceType["locale"],
-        });
+        this.appearanceHandle.applyHint({ locale: payload });
       }),
       this.on(APPEARANCE_EVENTS.THEME_CHANGED, (payload) => {
-        this.appearanceHandle.applyHint({
-          theme: payload as AppearanceType["theme"],
-        });
+        this.appearanceHandle.applyHint({ theme: payload });
       }),
     );
   }
@@ -392,10 +391,26 @@ export class MiniAppSdk implements MiniAppSdkInterface {
    * Subscribes to a host-emitted event. Returns an unsubscribe function.
    * Delegates entirely to `RpcClient`; the only value this method adds over
    * calling `rpc.onEvent` directly is that it's part of the stable public
-   * surface consumers already depend on.
+   * surface consumers already depend on. Known events (see `SdkEventMap`)
+   * get typed payloads; host-defined events outside the map remain usable
+   * through the `string` overload.
    */
-  on(event: string, handler: EventHandler): () => void {
-    return this.rpc.onEvent(event, handler);
+  on<K extends keyof SdkEventMap>(
+    event: K,
+    handler: (payload: SdkEventMap[K]) => void,
+    options?: OnEventOptions,
+  ): () => void;
+  on(
+    event: string,
+    handler: EventHandler,
+    options?: OnEventOptions,
+  ): () => void;
+  on(
+    event: string,
+    handler: EventHandler,
+    options?: OnEventOptions,
+  ): () => void {
+    return this.rpc.onEvent(event, handler, options);
   }
 
   /** {@inheritdoc} */
@@ -409,6 +424,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   }
 
   /** {@inheritdoc} */
+  emit<K extends keyof SdkEventMap>(event: K, data: SdkEventMap[K]): void;
+  emit(event: string, data?: unknown): void;
   emit(event: string, data?: unknown): void {
     this.rpc
       .request(NAMESPACES.EVENT, ACTIONS.EVENT.EMIT, { event, data })

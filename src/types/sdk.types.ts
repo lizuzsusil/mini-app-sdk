@@ -2,7 +2,6 @@ import type {
   ApiSdkModule,
   AuthSdkModule,
   ConfigSdkModule,
-  DeviceSdkModule,
   EventHandler,
   FlagsSdkModule,
   HostDescriptor,
@@ -16,6 +15,8 @@ import type { RpcMetricsOptions, RpcMetricsSnapshot } from "../observability";
 import type { RpcClient, RpcMiddleware, RpcRequestOptions } from "../rpc";
 import type { TransportDebugInfo } from "../transport";
 import type { ChatSdkModule } from "./chat.types";
+import type { OnEventOptions, SdkEventMap } from "./common.types";
+import type { DeviceSdkModuleWithGuards } from "./device.types";
 import type { StorageSdkModule } from "./storage.types";
 
 /** A single request currently awaiting a host reply, for debug snapshots. */
@@ -89,7 +90,7 @@ export interface MiniAppSdkInterface {
   navigation: NavigationSdkModule;
   storage: StorageSdkModule;
   platform: PlatformSdkModule;
-  device: DeviceSdkModule;
+  device: DeviceSdkModuleWithGuards;
   api: ApiSdkModule;
   http: HttpSdkModule;
   ai: ChatSdkModule;
@@ -98,7 +99,22 @@ export interface MiniAppSdkInterface {
 
   initialize(): Promise<void>;
   destroy(): void;
-  on(event: string, handler: EventHandler): () => void;
+
+  /**
+   * Subscribes to a host-emitted event. Returns an unsubscribe function.
+   * Known events get typed payloads via `SdkEventMap`; host-defined events
+   * outside that map remain usable through the `string` overload.
+   */
+  on<K extends keyof SdkEventMap>(
+    event: K,
+    handler: (payload: SdkEventMap[K]) => void,
+    options?: OnEventOptions,
+  ): () => void;
+  on(
+    event: string,
+    handler: EventHandler,
+    options?: OnEventOptions,
+  ): () => void;
 
   /**
    * Low-level escape hatch for host calls that don't have a dedicated module
@@ -113,7 +129,12 @@ export interface MiniAppSdkInterface {
     options?: RpcRequestOptions,
   ): Promise<T>;
 
-  /** Publishes an event to the shell's internal event bus. Other shell components may listen. Mini-apps cannot subscribe to each other directly. */
+  /**
+   * Publishes an event to the shell's internal event bus. Other shell
+   * components may listen. Mini-apps cannot subscribe to each other
+   * directly. Known events get typed payloads via `SdkEventMap`.
+   */
+  emit<K extends keyof SdkEventMap>(event: K, data: SdkEventMap[K]): void;
   emit(event: string, data?: unknown): void;
 
   /** Registers a middleware wrapping every request made from this point forward. See `rpc/middleware.ts`. */

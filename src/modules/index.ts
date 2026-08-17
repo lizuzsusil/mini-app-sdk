@@ -7,7 +7,7 @@ export {
   normalizeTheme,
 } from "./appearance.module";
 export { createAuthModule } from "./auth.module";
-export { createChatModule } from "./chat.module";
+export { ChatMessages, createChatModule } from "./chat.module";
 export { createConfigModule } from "./config.module";
 export { createDeviceModule } from "./device.module";
 export { createFlagsModule } from "./flags.module";

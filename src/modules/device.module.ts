@@ -1,6 +1,7 @@
 import { ACTIONS, NAMESPACES } from "../constants";
 import type { RpcClient } from "../rpc";
 import type {
+  DeviceAction,
   DeviceBiometricOptions,
   DeviceBiometricResult,
   DeviceCameraResult,
@@ -17,11 +18,29 @@ import type {
   DeviceNotificationResult,
   DeviceNotificationsOptions,
   DevicePermissionBaseResponse,
-  DeviceSdkModule,
+  DeviceSdkModuleWithGuards,
 } from "../types";
 
-export function createDeviceModule(rpc: RpcClient): DeviceSdkModule {
+/** Every action the device module can feature-detect. */
+const DEVICE_ACTIONS: readonly DeviceAction[] = [
+  "location",
+  "camera",
+  "gallery",
+  "files",
+  "download",
+  "contact",
+  "biometric",
+  "notifications",
+  "network",
+  "info",
+];
+
+export function createDeviceModule(rpc: RpcClient): DeviceSdkModuleWithGuards {
   return {
+    isSupported: (action: DeviceAction): boolean =>
+      DEVICE_ACTIONS.includes(action) &&
+      rpc.getCapabilities().includes(NAMESPACES.DEVICE),
+
     location: (options?: DeviceExtraOptions) =>
       rpc.request<DevicePermissionBaseResponse<DeviceLocationResult>>(
         NAMESPACES.DEVICE,

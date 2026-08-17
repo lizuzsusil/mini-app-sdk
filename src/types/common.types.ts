@@ -3,6 +3,43 @@ import type { LocaleState, ThemeState } from "@lizuz/mini-app-types";
 /** Generic event handler signature used by `MiniAppSdk.on()`. */
 export type EventHandler<TPayload = unknown> = (payload: TPayload) => void;
 
+/**
+ * The events this SDK knows about, keyed by their full wire name. A
+ * compile-time convenience for `sdk.on()` / `sdk.emit()` — not a runtime
+ * filter: the `string` overloads remain, so host-defined events outside this
+ * map keep working unchanged. Mirrors `APPEARANCE_EVENTS`,
+ * `NAVIGATION_EVENTS`, and `CONNECTION_EVENTS`.
+ */
+export interface SdkEventMap {
+  /** Payload is the raw host value: a locale tag or a full `LocaleState`. */
+  "appearance.locale.changed": string | LocaleState;
+  /** Payload is the raw host value: a preference string or a full `ThemeState`. */
+  "appearance.theme.changed": string | ThemeState;
+  /** The host is holding a native back press, waiting for the mini app to answer via `navigation.router.back(…)`. */
+  "navigation.back.requested": undefined;
+  /** Mini app → host: how its internal router moved, so the host can keep its back-button policy in sync. */
+  "navigation.route.changed": {
+    previous: string;
+    current: string;
+    canGoBack: boolean;
+  };
+  /** Emitted when the heartbeat/reconnect detects the host went away. */
+  "connection.lost": { timestamp: number };
+  /** Emitted after a successful reconnect handshake. */
+  "connection.established": { timestamp: number };
+}
+
+/** Options for `MiniAppSdk.on()` / `RpcClient.onEvent()`. */
+export interface OnEventOptions {
+  /**
+   * When true, the new handler is immediately invoked with the last few
+   * payloads this SDK has already seen for that event (a small bounded
+   * buffer, kept per event name). Handy for slow mounts that would otherwise
+   * miss events pushed before they subscribed. Defaults to false.
+   */
+  replay?: boolean;
+}
+
 /** The host shell the SDK is running inside: Flutter (mobile WebView) or web (Next.js). */
 export type PlatformTypeLiteral = "flutter" | "web";
 

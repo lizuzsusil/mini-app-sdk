@@ -15,6 +15,7 @@ export type SdkErrorCode =
   | "SDK_NOT_INITIALIZED"
   | "SDK_ALREADY_DESTROYED"
   | "REQUEST_CANCELLED"
+  | "STREAM_CANCELLED"
   | "HOST_ERROR";
 
 export interface SdkErrorOptions {

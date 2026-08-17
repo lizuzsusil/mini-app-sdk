@@ -16,10 +16,15 @@ export type {
   SdkErrorCode,
   SdkErrorOptions,
 } from "./errors";
-export { RequestCancelledError, SdkError } from "./errors";
+export {
+  RequestCancelledError,
+  SdkError,
+  StreamCancelledError,
+} from "./errors";
 export type { ConsoleLoggerOptions, Logger } from "./logging";
 export { ConsoleLogger, NoopLogger } from "./logging";
 export type { AppearanceModuleHandle, ModuleFactory } from "./modules";
+export { ChatMessages } from "./modules";
 export type {
   ActionMetrics,
   DurationPercentiles,
@@ -36,6 +41,7 @@ export type {
   RpcMiddlewareContext,
   RpcNext,
   RpcRequestOptions,
+  RpcStreamOptions,
 } from "./rpc";
 export { StreamBuilder } from "./stream";
 export type { Transport, TransportDebugInfo } from "./transport";
@@ -48,8 +54,10 @@ export type {
   AppearanceType,
   AuthSdkModule,
   ChatMessage,
+  ChatRequestOptions,
   ChatSdkModule,
   ConfigSdkModule,
+  DeviceAction,
   DeviceBiometricOptions,
   DeviceBiometricResult,
   DeviceCameraResult,
@@ -65,6 +73,7 @@ export type {
   DevicePermissionBaseResponse,
   DevicePermissionStatus,
   DeviceSdkModule,
+  DeviceSdkModuleWithGuards,
   Direction,
   EventHandler,
   FlagsSdkModule,
@@ -92,6 +101,7 @@ export type {
   NavigationSdkModule,
   NavigationState,
   NavigationTarget,
+  OnEventOptions,
   PendingRequestInfo,
   PermissionsSdkModule,
   PlatformSdkModule,
@@ -102,6 +112,7 @@ export type {
   Query,
   SdkDebug,
   SdkDebugSnapshot,
+  SdkEventMap,
   SdkStatus,
   StorageSdkModule,
   StorageSetOptions,

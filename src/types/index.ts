@@ -56,12 +56,18 @@ export type {
   ThemePreference,
   ThemeState,
 } from "@lizuz/mini-app-types";
-export type { ChatSdkModule } from "./chat.types";
+export type { ChatRequestOptions, ChatSdkModule } from "./chat.types";
 export type {
   AppearanceType,
+  OnEventOptions,
   PlatformTypeResponse,
   PlatformTypes,
+  SdkEventMap,
 } from "./common.types";
+export type {
+  DeviceAction,
+  DeviceSdkModuleWithGuards,
+} from "./device.types";
 export type {
   Headers,
   HttpBodyRequest,

@@ -102,9 +102,20 @@ export { AuthSdkModule }
 export { ChatMessage }
 
 // @public
+export const ChatMessages: {
+    readonly user: (content: string) => ChatMessage;
+    readonly system: (content: string) => ChatMessage;
+};
+
+// @public
+export interface ChatRequestOptions {
+    signal?: AbortSignal;
+}
+
+// @public
 export interface ChatSdkModule {
     // (undocumented)
-    chat(messages: ChatMessage[], options?: ModelCompletionOptions): Promise<StreamBuilder>;
+    chat(messages: ChatMessage[], options?: ModelCompletionOptions, requestOptions?: ChatRequestOptions): Promise<StreamBuilder>;
 }
 
 export { ConfigSdkModule }
@@ -138,6 +149,9 @@ export interface ConsoleLoggerOptions {
 // @public
 export function createMiniAppSdk(options: MiniAppSdkOptions): MiniAppSdk;
 
+// @public
+export type DeviceAction = "location" | "camera" | "gallery" | "files" | "download" | "contact" | "biometric" | "notifications" | "network" | "info";
+
 export { DeviceBiometricOptions }
 
 export { DeviceBiometricResult }
@@ -167,6 +181,11 @@ export { DevicePermissionBaseResponse }
 export { DevicePermissionStatus }
 
 export { DeviceSdkModule }
+
+// @public
+export interface DeviceSdkModuleWithGuards extends DeviceSdkModule {
+    isSupported(action: DeviceAction): boolean;
+}
 
 export { Direction }
 
@@ -282,9 +301,11 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     readonly debug: SdkDebug;
     destroy(): void;
     // (undocumented)
-    readonly device: DeviceSdkModule;
+    readonly device: DeviceSdkModuleWithGuards;
     // Warning: (ae-unresolved-inheritdoc-base) The @inheritDoc tag needs a TSDoc declaration reference; signature matching is not supported yet
     //
+    // (undocumented)
+    emit<K extends keyof SdkEventMap>(event: K, data: SdkEventMap[K]): void;
     // (undocumented)
     emit(event: string, data?: unknown): void;
     // (undocumented)
@@ -300,7 +321,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     readonly miniAppId: string;
     // (undocumented)
     readonly navigation: NavigationSdkModule;
-    on(event: string, handler: EventHandler): () => void;
+    on<K extends keyof SdkEventMap>(event: K, handler: (payload: SdkEventMap[K]) => void, options?: OnEventOptions): () => void;
+    // (undocumented)
+    on(event: string, handler: EventHandler, options?: OnEventOptions): () => void;
     // (undocumented)
     readonly permissions: PermissionsSdkModule;
     // (undocumented)
@@ -344,7 +367,9 @@ export interface MiniAppSdkInterface {
     // (undocumented)
     destroy(): void;
     // (undocumented)
-    device: DeviceSdkModule;
+    device: DeviceSdkModuleWithGuards;
+    emit<K extends keyof SdkEventMap>(event: K, data: SdkEventMap[K]): void;
+    // (undocumented)
     emit(event: string, data?: unknown): void;
     // (undocumented)
     flags: FlagsSdkModule;
@@ -359,8 +384,9 @@ export interface MiniAppSdkInterface {
     readonly miniAppId: string;
     // (undocumented)
     navigation: NavigationSdkModule;
+    on<K extends keyof SdkEventMap>(event: K, handler: (payload: SdkEventMap[K]) => void, options?: OnEventOptions): () => void;
     // (undocumented)
-    on(event: string, handler: EventHandler): () => void;
+    on(event: string, handler: EventHandler, options?: OnEventOptions): () => void;
     // (undocumented)
     permissions: PermissionsSdkModule;
     // (undocumented)
@@ -427,6 +453,11 @@ export class NoopLogger implements Logger {
     info(): void;
     // (undocumented)
     warn(): void;
+}
+
+// @public
+export interface OnEventOptions {
+    replay?: boolean;
 }
 
 // @public
@@ -579,6 +610,11 @@ export interface RpcRequestOptions {
 }
 
 // @public
+export interface RpcStreamOptions {
+    signal?: AbortSignal;
+}
+
+// @public
 export interface SdkDebug {
     snapshot(): SdkDebugSnapshot;
 }
@@ -616,7 +652,7 @@ export class SdkError extends Error {
 }
 
 // @public
-export type SdkErrorCode = "TIMEOUT" | "TRANSPORT_NOT_STARTED" | "TRANSPORT_SEND_FAILED" | "HANDSHAKE_FAILED" | "HANDSHAKE_TIMEOUT" | "INVALID_MESSAGE" | "SDK_NOT_INITIALIZED" | "SDK_ALREADY_DESTROYED" | "REQUEST_CANCELLED" | "HOST_ERROR";
+export type SdkErrorCode = "TIMEOUT" | "TRANSPORT_NOT_STARTED" | "TRANSPORT_SEND_FAILED" | "HANDSHAKE_FAILED" | "HANDSHAKE_TIMEOUT" | "INVALID_MESSAGE" | "SDK_NOT_INITIALIZED" | "SDK_ALREADY_DESTROYED" | "REQUEST_CANCELLED" | "STREAM_CANCELLED" | "HOST_ERROR";
 
 // @public (undocumented)
 export interface SdkErrorOptions {
@@ -630,6 +666,24 @@ export interface SdkErrorOptions {
     message: string;
     // (undocumented)
     retryable?: boolean;
+}
+
+// @public
+export interface SdkEventMap {
+    "appearance.locale.changed": string | LocaleState;
+    "appearance.theme.changed": string | ThemeState;
+    "connection.established": {
+        timestamp: number;
+    };
+    "connection.lost": {
+        timestamp: number;
+    };
+    "navigation.back.requested": undefined;
+    "navigation.route.changed": {
+        previous: string;
+        current: string;
+        canGoBack: boolean;
+    };
 }
 
 // @public
@@ -653,11 +707,22 @@ export interface StorageSetOptions {
 // @public
 export class StreamBuilder {
     addChunk(chunk: StreamChunk): void;
+    cancel(error?: Error): void;
     get isDone(): boolean;
     get isRejected(): boolean;
     iterate(): AsyncIterableIterator<string | Uint8Array>;
+    get onCancel(): (() => void) | null;
+    set onCancel(callback: (() => void) | null);
+    get receivedBytes(): number;
+    get receivedChunks(): number;
     rejectChunk(err: Error): void;
+    get total(): number;
     waitUntilDone(): Promise<void>;
+}
+
+// @public
+export class StreamCancelledError extends SdkError {
+    constructor(message?: string);
 }
 
 export { StreamChunk }

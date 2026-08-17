@@ -109,6 +109,7 @@ export const ACTIONS = {
   },
   AI: {
     CHAT: "chat",
+    CANCEL: "cancel",
   },
   EVENT: {
     SUBSCRIBE: "subscribe",

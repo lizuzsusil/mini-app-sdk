@@ -9,6 +9,7 @@ import {
   HandshakeError,
   ProtocolError,
   RequestCancelledError,
+  StreamCancelledError,
   TimeoutError,
 } from "../errors";
 import type { Logger } from "../logging";
@@ -959,5 +960,201 @@ describe("RpcClient heartbeat & reconnect", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("RpcClient stream cancellation", () => {
+  it("rejects the stream and notifies the host when the signal aborts", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 5000 });
+    client.start();
+
+    const controller = new AbortController();
+    const builderPromise = client.sendStreamRequest(
+      NAMESPACES.AI,
+      ACTIONS.AI.CHAT,
+      undefined,
+      { signal: controller.signal },
+    );
+    const sent = transport.lastSent!;
+
+    controller.abort();
+
+    const builder = await builderPromise;
+    await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(
+      RequestCancelledError,
+    );
+    expect(builder.isRejected).toBe(true);
+
+    const cancel = transport.sent.find(
+      (m) =>
+        m.namespace === NAMESPACES.AI && m.action === ACTIONS.AI.CANCEL,
+    );
+    expect(cancel).toBeDefined();
+    expect((cancel!.payload as { requestId: string }).requestId).toBe(
+      sent.requestId,
+    );
+  });
+
+  it("rejects immediately when the signal is already aborted", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 5000 });
+    client.start();
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const builder = await client.sendStreamRequest(
+      NAMESPACES.AI,
+      ACTIONS.AI.CHAT,
+      undefined,
+      { signal: controller.signal },
+    );
+
+    await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(
+      RequestCancelledError,
+    );
+    // The host was still told to stop producing.
+    expect(
+      transport.sent.some(
+        (m) =>
+          m.namespace === NAMESPACES.AI && m.action === ACTIONS.AI.CANCEL,
+      ),
+    ).toBe(true);
+  });
+
+  it("cancelStream(requestId) rejects the builder and notifies the host", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 5000 });
+    client.start();
+
+    const builderPromise = client.sendStreamRequest(
+      NAMESPACES.AI,
+      ACTIONS.AI.CHAT,
+    );
+    const sent = transport.lastSent!;
+    const builder = await builderPromise;
+
+    client.cancelStream(sent.requestId);
+
+    await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(
+      StreamCancelledError,
+    );
+    expect(
+      transport.sent.some(
+        (m) =>
+          m.namespace === NAMESPACES.AI && m.action === ACTIONS.AI.CANCEL,
+      ),
+    ).toBe(true);
+  });
+
+  it("cancelStream is a no-op for an unknown or settled stream", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { timeout: 5000 });
+    client.start();
+
+    expect(() => client.cancelStream("does-not-exist")).not.toThrow();
+  });
+});
+
+describe("RpcClient event replay buffer", () => {
+  function pushEvent(
+    transport: FakeTransport,
+    namespace: string,
+    action: string,
+    payload: unknown,
+  ): void {
+    transport.simulateIncoming(
+      createMessage(
+        "event",
+        namespace,
+        action,
+        HOST_TARGET,
+        "test-mini-app",
+        payload,
+      ),
+    );
+  }
+
+  it("replays buffered payloads to a handler subscribed with replay: true", () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const first = vi.fn();
+    client.onEvent("notification.received", first);
+    pushEvent(transport, "notification", "received", { title: "A" });
+    pushEvent(transport, "notification", "received", { title: "B" });
+    expect(first).toHaveBeenCalledTimes(2);
+
+    const second = vi.fn();
+    client.onEvent("notification.received", second, { replay: true });
+    expect(second.mock.calls.map((call) => call[0])).toEqual([
+      { title: "A" },
+      { title: "B" },
+    ]);
+  });
+
+  it("does not replay buffered payloads without the replay option", () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    client.onEvent("notification.received", vi.fn());
+    pushEvent(transport, "notification", "received", { title: "A" });
+
+    const second = vi.fn();
+    client.onEvent("notification.received", second);
+    expect(second).not.toHaveBeenCalled();
+  });
+
+  it("keeps the replay buffer bounded to the most recent payloads", () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    client.onEvent("notification.received", vi.fn());
+    for (let i = 0; i < 7; i++) {
+      pushEvent(transport, "notification", "received", { n: i });
+    }
+
+    const late = vi.fn();
+    client.onEvent("notification.received", late, { replay: true });
+    expect(late.mock.calls.map((call) => call[0])).toEqual([
+      { n: 2 },
+      { n: 3 },
+      { n: 4 },
+      { n: 5 },
+      { n: 6 },
+    ]);
+  });
+
+  it("replays host events delivered before the first subscription", () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    // A host that pushes events without waiting for event.subscribe.
+    pushEvent(transport, "config", "changed", { flags: { new: true } });
+
+    const handler = vi.fn();
+    client.onEvent("config.changed", handler, { replay: true });
+    expect(handler).toHaveBeenCalledWith({ flags: { new: true } });
+  });
+
+  it("clears the replay buffer when the client stops", () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    client.onEvent("config.changed", vi.fn());
+    pushEvent(transport, "config", "changed", { v: 1 });
+    client.stop();
+
+    // A fresh client has no buffered state; this test asserts stop() doesn't
+    // leave stale payloads behind for future subscriptions.
+    const late = vi.fn();
+    client.onEvent("config.changed", late, { replay: true });
+    expect(late).not.toHaveBeenCalled();
   });
 });

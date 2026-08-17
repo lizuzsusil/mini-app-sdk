@@ -1,118 +1,36 @@
-import type { PlatformTypeLiteral } from "./common.types";
+import type { DeviceSdkModule } from "@lizuz/mini-app-types";
 
-export type DevicePermissionStatus =
-  | "granted"
-  | "denied"
-  | "permanentlyDenied"
-  | "restricted";
+/**
+ * The device actions a mini app can feature-detect with `isSupported`. The
+ * host protocol today is namespace-granular — every action lives under the
+ * `device` namespace — so this union exists for typo-safety and future
+ * per-action capability reporting, not because the host differentiates them.
+ */
+export type DeviceAction =
+  | "location"
+  | "camera"
+  | "gallery"
+  | "files"
+  | "download"
+  | "contact"
+  | "biometric"
+  | "notifications"
+  | "network"
+  | "info";
 
-export interface DevicePermissionBaseResponse<T> {
-  status: DevicePermissionStatus;
-  data?: T;
-  error?: string;
-}
-
-export interface DeviceLocationResult {
-  latitude: number;
-  longitude: number;
-  accuracy?: number;
-  timestamp?: Date | string;
-}
-
-export interface DeviceExtraOptions {
-  reason?: string;
-}
-
-export interface FileModule {
-  rawFile?: File;
-  url: string;
-  fileName?: string;
-  mimeType?: string;
-  extension?: string;
-  byteSize?: number;
-  previewUrl?: string;
-}
-
-export interface DeviceFileOptions extends DeviceExtraOptions {
-  multiple?: boolean;
-  accept?: string[];
-}
-
-export interface DeviceCameraResult {
-  url: string;
-  fileName?: string;
-  mimeType?: string;
-  byteSize?: number;
-  rawFile?: File;
-}
-
-export interface DeviceGalleryResult {
-  images: FileModule[];
-}
-
-export interface DeviceFileResult {
-  file: FileModule[];
-}
-
-export interface DeviceDownloadResult {
-  file: FileModule;
-}
-
-export interface DeviceNotificationResult {
-  enabled: boolean;
-  token?: string;
-}
-
-export interface DeviceNetworkResult {
-  online: boolean;
-  type?: "wifi" | "cellular" | "none";
-  effectiveType?: string;
-}
-
-export interface DeviceInfoResult {
-  platform: PlatformTypeLiteral;
-  osVersion: string;
-  appVersion: string;
-  deviceModel?: string;
-  screenWidth?: number;
-  screenHeight?: number;
-}
-
-export interface DeviceBiometricOptions {
-  reason?: string;
-  [key: string]: unknown;
-}
-
-export interface DeviceBiometricResult {
-  success: boolean;
-  error?: string;
-}
-
-export interface DeviceNotificationsOptions {
-  requestPermission?: boolean;
-  [key: string]: unknown;
-}
-
-export interface DeviceSdkModule {
-  camera(
-    options?: DeviceExtraOptions,
-  ): Promise<DevicePermissionBaseResponse<DeviceCameraResult>>;
-  location(
-    options?: DeviceExtraOptions,
-  ): Promise<DevicePermissionBaseResponse<DeviceLocationResult>>;
-  gallery(
-    options?: DeviceFileOptions,
-  ): Promise<DevicePermissionBaseResponse<DeviceGalleryResult>>;
-  files(
-    options?: DeviceFileOptions,
-  ): Promise<DevicePermissionBaseResponse<DeviceFileResult>>;
-  download(
-    options?: DeviceExtraOptions,
-  ): Promise<DevicePermissionBaseResponse<DeviceDownloadResult>>;
-  biometric(options?: DeviceBiometricOptions): Promise<DeviceBiometricResult>;
-  notifications(
-    options?: DeviceNotificationsOptions,
-  ): Promise<DeviceNotificationResult>;
-  network(): Promise<DeviceNetworkResult>;
-  info(): Promise<DeviceInfoResult>;
+/**
+ * The device module, plus a `isSupported` feature-detect guard. Mini apps
+ * branch on `sdk.device.isSupported("biometric")` instead of discovering a
+ * missing capability at request-time via a `ProtocolError`.
+ */
+export interface DeviceSdkModuleWithGuards extends DeviceSdkModule {
+  /**
+   * Whether the host negotiated the `device` namespace during the handshake.
+   * Returns `false` before `sdk.initialize()` resolves (capabilities aren't
+   * known yet). Because the protocol advertises capabilities at namespace
+   * granularity, a supported action means "the namespace exists", not that a
+   * specific action is implemented — the host may still reject an individual
+   * call.
+   */
+  isSupported(action: DeviceAction): boolean;
 }

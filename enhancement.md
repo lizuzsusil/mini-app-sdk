@@ -44,6 +44,26 @@ Implemented:
   `src/types/sdk.types.ts`, `src/client/MiniAppSdk.ts`).
 - **3.1 Storage: JSON values, TTL, scoped keys** — `getJson`/`setJson`,
   `ttlMs` option, and `scoped(prefix)` (`src/modules/storage.module.ts`).
+- **1.3 Event replay buffer** — `sdk.on(event, handler, { replay: true })` /
+  `RpcClient.onEvent(..., { replay: true })` re-delivers the last 5 payloads
+  per event from a bounded client-side buffer, so a handler registered after
+  the host started emitting still observes recent values; cleared on `stop()`
+  (`src/rpc/rpc-client.ts`, `src/types/common.types.ts`).
+- **1.4 Typed events** — `SdkEventMap` maps the known event names to their
+  payload types; `sdk.on`/`sdk.emit` gain typed overloads while keeping the
+  `string` fallback so host-defined events remain usable
+  (`src/types/common.types.ts`, `src/client/MiniAppSdk.ts`).
+- **3.2 Feature-detect guards for device APIs** — `sdk.device.isSupported(action)`
+  consults the negotiated capabilities (namespace-granular today) and rejects
+  unknown action names, so mini apps branch instead of try/catching
+  `ProtocolError`s (`src/modules/device.module.ts`,
+  `src/types/device.types.ts`).
+- **3.3 AI chat polish** — `StreamBuilder.cancel()` (with the RPC layer
+  notifying the host via `ai.cancel`), a `signal` option on `chat()` for
+  ergonomic cancellation (`RequestCancelledError`), progress accessors
+  (`receivedBytes`, `receivedChunks`, `total`), and `ChatMessages` history
+  helpers (`src/stream/stream-builder.ts`, `src/rpc/rpc-client.ts`,
+  `src/modules/chat.module.ts`, `src/constants/namespaces.constants.ts`).
 - **4.1 Breaking-change detection (API extractor)** — `@microsoft/api-extractor`
   emits `etc/sewa-sdk.api.md` and rolls up `dist/sewa-sdk.d.ts` (the `types`
   field now finally ships); `api:report` regenerates the report, and `build` /

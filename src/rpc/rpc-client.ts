@@ -28,7 +28,11 @@ import {
 } from "../protocol";
 import { StreamBuilder } from "../stream";
 import type { Transport, TransportDebugInfo } from "../transport";
-import type { HeartbeatOptions, PendingRequestInfo } from "../types";
+import type {
+  HeartbeatOptions,
+  OnEventOptions,
+  PendingRequestInfo,
+} from "../types";
 import { computeBackoffMs, delay, generateId } from "../utils";
 import type { RpcMiddleware } from "./middleware";
 import { composeMiddleware } from "./middleware";
@@ -41,6 +45,16 @@ export interface RpcRequestOptions {
    * When provided, aborting the signal rejects the in-flight request (and any
    * pending retries) with a `RequestCancelledError` — useful for unmounting
    * screens or navigating away without waiting for the timeout.
+   */
+  signal?: AbortSignal;
+}
+
+/** Per-stream control knobs passed to `sendStreamRequest()`. */
+export interface RpcStreamOptions {
+  /**
+   * When provided, aborting the signal cancels the stream (rejecting the
+   * `StreamBuilder` with a `RequestCancelledError`) and notifies the host to
+   * stop producing.
    */
   signal?: AbortSignal;
 }
@@ -74,6 +88,13 @@ interface PendingRequest {
   startedAt: number;
 }
 
+/** Metadata the RPC layer keeps per active streamed request. */
+interface StreamRecord {
+  builder: StreamBuilder;
+  namespace: string;
+  action: string;
+}
+
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_RETRY_ATTEMPTS = 2;
 const DEFAULT_RETRY_DELAY_MS = 500;
@@ -81,6 +102,9 @@ const DEFAULT_MAX_RETRY_DELAY_MS = 8_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_MISSED_PONGS = 2;
+
+/** How many recent payloads per event the replay buffer retains. */
+const EVENT_REPLAY_BUFFER_SIZE = 5;
 
 /**
  * The SDK package version reported during handshake. Kept separate from
@@ -114,7 +138,7 @@ export class RpcClient {
 
   private readonly pending = new Map<string, PendingRequest>();
   private readonly eventHandlers = new Map<string, Set<EventHandler>>();
-  private readonly streamConsumers = new Map<string, StreamBuilder>();
+  private readonly streamConsumers = new Map<string, StreamRecord>();
   private readonly middlewares: RpcMiddleware[] = [];
   private readonly metricsRecorder: MetricsRecorder;
   private readonly warnedUnavailableCapabilities = new Set<string>();
@@ -130,6 +154,14 @@ export class RpcClient {
     string,
     { onPong: () => void; timer: ReturnType<typeof setTimeout> }
   >();
+
+  /**
+   * Bounded per-event buffer of recent payloads, for `onEvent()` subscriptions
+   * that pass the `replay` option. New subscribers receive the buffered values
+   * immediately so a slow mount doesn't lose events that arrived before it
+   * subscribed.
+   */
+  private readonly eventReplayBuffer = new Map<string, unknown[]>();
 
   /**
    * Namespaces the host confirmed support for during the handshake. `null`
@@ -185,7 +217,7 @@ export class RpcClient {
     }
 
     for (const [, stream] of this.streamConsumers) {
-      stream.rejectChunk(
+      stream.builder.rejectChunk(
         new ProtocolError({
           reason: "malformed-message",
           message:
@@ -196,6 +228,7 @@ export class RpcClient {
     this.streamConsumers.clear();
 
     this.eventHandlers.clear();
+    this.eventReplayBuffer.clear();
   }
 
   /**
@@ -443,11 +476,17 @@ export class RpcClient {
    * stream may already have produced output by the time a failure would be
    * detected, so an automatic retry can't be spliced in safely. A timeout
    * still applies, matching every other request.
+   *
+   * An optional `AbortSignal` in `options` cancels the stream: the builder
+   * rejects with a `RequestCancelledError` and the host is told to stop
+   * producing. A mini app can also cancel directly via `builder.cancel()`,
+   * which notifies the host the same way.
    */
   async sendStreamRequest(
     namespace: string,
     action: string,
     payload?: unknown,
+    options?: RpcStreamOptions,
   ): Promise<StreamBuilder> {
     const message = createMessage(
       "request",
@@ -462,7 +501,20 @@ export class RpcClient {
     );
 
     const builder = new StreamBuilder();
-    this.streamConsumers.set(message.requestId, builder);
+    const signal = options?.signal;
+    this.streamConsumers.set(message.requestId, { builder, namespace, action });
+    builder.onCancel = () => this.notifyHostStreamCancelled(message.requestId);
+
+    const onAbort = (): void => {
+      this.cancelStreamBuilder(
+        message.requestId,
+        new RequestCancelledError({
+          namespace,
+          action,
+          cause: signal?.reason,
+        }),
+      );
+    };
 
     const timer = setTimeout(() => {
       this.streamConsumers.delete(message.requestId);
@@ -471,28 +523,72 @@ export class RpcClient {
       );
     }, this.timeout);
 
+    const cleanup = (): void => {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
+      this.streamConsumers.delete(message.requestId);
+    };
+
     try {
       this.transport.send(message);
     } catch (error) {
-      clearTimeout(timer);
-      this.streamConsumers.delete(message.requestId);
+      cleanup();
       builder.rejectChunk(
         error instanceof Error ? error : new Error(String(error)),
       );
     }
 
-    builder.waitUntilDone().then(
-      () => {
-        clearTimeout(timer);
-        this.streamConsumers.delete(message.requestId);
-      },
-      () => {
-        clearTimeout(timer);
-        this.streamConsumers.delete(message.requestId);
-      },
-    );
+    builder.waitUntilDone().then(cleanup, cleanup);
+
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener("abort", onAbort, { once: true });
+      }
+    }
 
     return builder;
+  }
+
+  /**
+   * Explicitly cancels an active streamed request by its `requestId`,
+   * rejecting its builder and notifying the host to stop producing. No-op if
+   * the stream already settled. The RPC layer owns cancellation semantics —
+   * the `StreamBuilder` itself stays transport-agnostic.
+   */
+  cancelStream(requestId: string): void {
+    const record = this.streamConsumers.get(requestId);
+    if (!record) return;
+    this.cancelStreamBuilder(requestId);
+  }
+
+  /**
+   * Rejects a stream's builder with the given error (defaulting to a
+   * `StreamCancelledError`), also firing the builder's `onCancel` hook so the
+   * host is told to stop. `onAbort` uses this for the signal path.
+   */
+  private cancelStreamBuilder(requestId: string, error?: Error): void {
+    this.streamConsumers.get(requestId)?.builder.cancel(error);
+  }
+
+  /**
+   * Fire-and-forget host notification that a stream is being cancelled, so
+   * the host can stop generating chunks instead of streaming into the void.
+   */
+  private notifyHostStreamCancelled(requestId: string): void {
+    const record = this.streamConsumers.get(requestId);
+    if (!record) return;
+    this.request<unknown>(record.namespace, ACTIONS.AI.CANCEL, {
+      requestId,
+    }).catch((error: unknown) => {
+      this.logger.warn(
+        `Failed to notify the host that stream "${requestId}" was cancelled`,
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    });
   }
 
   /**
@@ -504,10 +600,17 @@ export class RpcClient {
    * an event once they've received this. The subscribe call is
    * fire-and-forget: a host that doesn't require explicit subscription
    * simply ignores it.
+   *
+   * With `{ replay: true }`, the handler is immediately invoked with the
+   * last few payloads this client has already seen for that event (a small
+   * bounded buffer, kept per event name), so a handler registered after the
+   * host started emitting still observes the most recent value rather than
+   * only future changes.
    */
   onEvent<TPayload = unknown>(
     event: string,
     handler: EventHandler<TPayload>,
+    options?: OnEventOptions,
   ): () => void {
     const isFirstHandlerForEvent = !this.eventHandlers.has(event);
     if (isFirstHandlerForEvent) {
@@ -522,9 +625,33 @@ export class RpcClient {
     }
 
     this.eventHandlers.get(event)?.add(handler as EventHandler);
+
+    if (options?.replay) {
+      for (const payload of this.eventReplayBuffer.get(event) ?? []) {
+        try {
+          handler(payload as TPayload);
+        } catch (error) {
+          this.logger.warn(`Event handler for "${event}" threw`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+
     return () => {
       this.eventHandlers.get(event)?.delete(handler as EventHandler);
     };
+  }
+
+  /**
+   * Records a payload into the bounded per-event replay buffer, dropping the
+   * oldest entry once `EVENT_REPLAY_BUFFER_SIZE` is exceeded.
+   */
+  private bufferEvent(event: string, payload: unknown): void {
+    const buffer = this.eventReplayBuffer.get(event) ?? [];
+    buffer.push(payload);
+    if (buffer.length > EVENT_REPLAY_BUFFER_SIZE) buffer.shift();
+    this.eventReplayBuffer.set(event, buffer);
   }
 
   getTraceId(): string {
@@ -588,6 +715,7 @@ export class RpcClient {
    * exists, so first registering a listener marks the connection "live".
    */
   private emitLocalEvent(event: string, payload: unknown): void {
+    this.bufferEvent(event, payload);
     const handlers = this.eventHandlers.get(event);
     handlers?.forEach((handler) => {
       try {
@@ -879,7 +1007,7 @@ export class RpcClient {
         // A streamed request is normally answered entirely with `stream`
         // messages, but a host that refuses it up front may answer with a
         // plain `response` carrying an error. Surface that to the stream.
-        const stream = this.streamConsumers.get(message.requestId);
+        const stream = this.streamConsumers.get(message.requestId)?.builder;
         if (stream && message.error) {
           stream.rejectChunk(
             new ProtocolError({
@@ -908,7 +1036,7 @@ export class RpcClient {
     }
 
     if (message.type === "stream") {
-      const stream = this.streamConsumers.get(message.requestId);
+      const stream = this.streamConsumers.get(message.requestId)?.builder;
       if (!stream) return;
 
       if (message.error) {
@@ -937,6 +1065,7 @@ export class RpcClient {
 
     if (message.type === "event") {
       const key = `${message.namespace}.${message.action}`;
+      this.bufferEvent(key, message.payload);
       const handlers = this.eventHandlers.get(key);
       handlers?.forEach((handler) => {
         handler(message.payload);
