@@ -7,12 +7,15 @@ import {
 } from "../constants";
 import {
   HandshakeError,
+  HttpClientError,
+  HttpServerError,
   ProtocolError,
   RequestCancelledError,
   StreamCancelledError,
   TimeoutError,
 } from "../errors";
 import type { Logger } from "../logging";
+import type { Span, Tracer } from "../observability";
 import type { PlatformMessage } from "../protocol";
 import { createMessage } from "../protocol";
 import { FakeTransport } from "../testing";
@@ -24,6 +27,7 @@ function makeClient(
     timeout: number;
     retryAttempts: number;
     retryDelayMs: number;
+    tracer: Tracer;
   }> = {},
 ) {
   return new RpcClient(transport, {
@@ -31,6 +35,7 @@ function makeClient(
     timeout: overrides.timeout ?? 1000,
     retryAttempts: overrides.retryAttempts ?? 2,
     retryDelayMs: overrides.retryDelayMs ?? 1,
+    tracer: overrides.tracer,
   });
 }
 
@@ -1156,5 +1161,315 @@ describe("RpcClient event replay buffer", () => {
     const late = vi.fn();
     client.onEvent("config.changed", late, { replay: true });
     expect(late).not.toHaveBeenCalled();
+  });
+});
+
+/** Records spans in memory for asserting on tracing behavior. */
+class RecordingSpan implements Span {
+  readonly attributes: Record<string, unknown> = {};
+  ended = false;
+
+  constructor(readonly name: string) {}
+
+  end(): void {
+    this.ended = true;
+  }
+
+  setAttribute(key: string, value: unknown): void {
+    this.attributes[key] = value;
+  }
+}
+
+class RecordingTracer implements Tracer {
+  readonly spans: RecordingSpan[] = [];
+
+  startSpan(name: string, context?: Record<string, unknown>): RecordingSpan {
+    const span = new RecordingSpan(name);
+    for (const [key, value] of Object.entries(context ?? {})) {
+      span.setAttribute(key, value);
+    }
+    this.spans.push(span);
+    return span;
+  }
+}
+
+function traceClient(
+  transport: FakeTransport,
+  tracer: RecordingTracer,
+  overrides: Partial<{ timeout: number; retryAttempts: number }> = {},
+): RpcClient {
+  return makeClient(transport, { tracer, ...overrides });
+}
+
+describe("RpcClient tracing", () => {
+  it("records a rpc.request span around a successful request", async () => {
+    const transport = new FakeTransport();
+    const tracer = new RecordingTracer();
+    const client = traceClient(transport, tracer);
+    client.start();
+
+    const promise = client.request("auth", "getUser");
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        { id: "user-1" },
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+    await promise;
+
+    const span = tracer.spans.find((s) => s.name === "rpc.request");
+    expect(span).toBeDefined();
+    expect(span!.attributes).toMatchObject({ namespace: "auth", action: "getUser" });
+    expect(span!.ended).toBe(true);
+  });
+
+  it("records the error and retryable flag on the span when the request fails", async () => {
+    const transport = new FakeTransport();
+    const tracer = new RecordingTracer();
+    const client = traceClient(transport, tracer);
+    client.start();
+
+    const promise = client.request("permissions", "has");
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        undefined,
+        {
+          requestId: sent.requestId,
+          traceId: sent.traceId,
+          error: {
+            code: "PERMISSION_DENIED",
+            message: "nope",
+            retryable: false,
+          },
+        },
+      ),
+    );
+    await expect(promise).rejects.toBeInstanceOf(ProtocolError);
+
+    const span = tracer.spans.find((s) => s.name === "rpc.request");
+    expect(span!.attributes.error).toBe("nope");
+    expect(span!.attributes.retryable).toBe(false);
+    expect(span!.ended).toBe(true);
+  });
+
+  it("annotates the span with retryCount when a retryable failure retries", async () => {
+    const transport = new FakeTransport();
+    const tracer = new RecordingTracer();
+    const client = traceClient(transport, tracer, {
+      timeout: 10,
+      retryAttempts: 1,
+    });
+    client.start();
+
+    await expect(
+      client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.NETWORK),
+    ).rejects.toBeInstanceOf(TimeoutError);
+
+    const span = tracer.spans.find((s) => s.name === "rpc.request");
+    expect(span!.attributes.retryCount).toBe(1);
+    expect(span!.ended).toBe(true);
+  });
+
+  it("records a rpc.stream span that ends when the stream completes", async () => {
+    const transport = new FakeTransport();
+    const tracer = new RecordingTracer();
+    const client = traceClient(transport, tracer);
+    client.start();
+
+    const builderPromise = client.sendStreamRequest(
+      NAMESPACES.AI,
+      ACTIONS.AI.CHAT,
+    );
+    const sent = transport.lastSent!;
+    const chunk = createMessage(
+      "stream",
+      sent.namespace,
+      sent.action,
+      HOST_TARGET,
+      "test-mini-app",
+      "hello",
+      { requestId: sent.requestId, traceId: sent.traceId },
+    );
+    transport.simulateIncoming(
+      Object.assign(chunk, { streamIndex: 0, streamLast: true }),
+    );
+    await builderPromise.then((builder) => builder.waitUntilDone());
+
+    const span = tracer.spans.find((s) => s.name === "rpc.stream");
+    expect(span).toBeDefined();
+    expect(span!.attributes).toMatchObject({ namespace: "ai", action: "chat" });
+    expect(span!.ended).toBe(true);
+  });
+
+  it("records a rpc.handshake span that ends on success", async () => {
+    const transport = new FakeTransport();
+    const tracer = new RecordingTracer();
+    const client = traceClient(transport, tracer);
+    client.start();
+
+    const promise = client.handshake();
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "handshake",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        { status: "ok" },
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+    await promise;
+
+    const span = tracer.spans.find((s) => s.name === "rpc.handshake");
+    expect(span).toBeDefined();
+    expect(span!.attributes.miniAppId).toBe("test-mini-app");
+    expect(span!.ended).toBe(true);
+  });
+
+  it("uses a no-op tracer by default and still succeeds", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.request("auth", "getUser");
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        { id: "user-1" },
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+    await expect(promise).resolves.toEqual({ id: "user-1" });
+  });
+});
+
+describe("RpcClient mapPayload", () => {
+  it("applies mapPayload to a successful payload", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.request<string>(
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.GET,
+      undefined,
+      { mapPayload: (payload) => `mapped:${String(payload)}` },
+    );
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        "raw",
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+
+    await expect(promise).resolves.toBe("mapped:raw");
+  });
+
+  it("does not retry a non-retryable error thrown by mapPayload", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport);
+    client.start();
+
+    const promise = client.request(
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.GET,
+      undefined,
+      {
+        mapPayload: () => {
+          throw new HttpClientError({ status: 404 });
+        },
+      },
+    );
+    const sent = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        sent.namespace,
+        sent.action,
+        HOST_TARGET,
+        "test-mini-app",
+        { status: 404, data: null, headers: {} },
+        { requestId: sent.requestId, traceId: sent.traceId },
+      ),
+    );
+
+    await expect(promise).rejects.toBeInstanceOf(HttpClientError);
+    await expect(promise).rejects.toMatchObject({ status: 404 });
+    expect(transport.sent).toHaveLength(1);
+  });
+
+  it("retries a retryable error thrown by mapPayload, then succeeds", async () => {
+    const transport = new FakeTransport();
+    const client = makeClient(transport, { retryDelayMs: 1 });
+    client.start();
+
+    const promise = client.request(
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.GET,
+      undefined,
+      {
+        mapPayload: (payload) => {
+          const result = payload as { status: number };
+          if (result.status >= 500) {
+            throw new HttpServerError({ status: result.status });
+          }
+          return result;
+        },
+      },
+    );
+    const first = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        first.namespace,
+        first.action,
+        HOST_TARGET,
+        "test-mini-app",
+        { status: 503, data: null, headers: {} },
+        { requestId: first.requestId, traceId: first.traceId },
+      ),
+    );
+
+    await vi.waitFor(() => expect(transport.sent).toHaveLength(2));
+
+    const second = transport.lastSent!;
+    transport.simulateIncoming(
+      createMessage(
+        "response",
+        second.namespace,
+        second.action,
+        HOST_TARGET,
+        "test-mini-app",
+        { status: 200, data: "ok", headers: {} },
+        { requestId: second.requestId, traceId: second.traceId },
+      ),
+    );
+
+    await expect(promise).resolves.toMatchObject({ status: 200, data: "ok" });
   });
 });

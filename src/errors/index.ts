@@ -1,4 +1,6 @@
 export { HandshakeError } from "./handshake-error";
+export { HttpClientError } from "./http-client-error";
+export { HttpServerError } from "./http-server-error";
 export { ProtocolError } from "./protocol-error";
 export type { RequestCancelledErrorOptions } from "./request-cancelled-error";
 export { RequestCancelledError } from "./request-cancelled-error";

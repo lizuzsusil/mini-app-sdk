@@ -71,6 +71,35 @@ Implemented:
   (`api-extractor.json`, `tsconfig.api.json`, `package.json`).
 - **4.2 CI pipeline** — `.github/workflows/ci.yml` (checks) and
   `publish.yml` (tag-triggered npm publish).
+- **2.5 Pluggable tracing** — minimal `Tracer`/`Span` interfaces plus a
+  `noopTracer` default; `MiniAppSdkDependencies.tracer` bridges RPC spans into
+  a host's existing setup. The RPC layer starts `rpc.handshake` /
+  `rpc.request` / `rpc.stream` spans annotated with `namespace`, `action`,
+  `traceId`, and (on failure) `error`/`retryable`/`retryCount`
+  (`src/observability/tracer.ts`, `src/observability/tracer.types.ts`,
+  `src/rpc/rpc-client.ts`, `src/client/MiniAppSdk.ts`).
+- **3.4 HTTP polish** — typed errors (`HttpClientError` for 4xx,
+  `HttpServerError` for 5xx, the latter `retryable` so it participates in the
+  retry loop via a new `RpcRequestOptions.mapPayload` hook), `getStream` for
+  large downloads/SSE routed through the stream machinery, and upload progress
+  mirrored from the `http.uploadProgress` event onto
+  `HttpUploadOptions.onProgress` (`src/modules/http.module.ts`,
+  `src/types/http.types.ts`, `src/errors/http-client-error.ts`,
+  `src/errors/http-server-error.ts`, `src/rpc/rpc-client.ts`).
+- **3.5 Push notifications & deep links** — first-class `notifications` and
+  `links` namespaces (gated on capability negotiation like `device`, with
+  `isSupported()` guards) for push-token/permission registration and
+  notification/open events, and for opening URLs / resolving inbound deep
+  links (`src/modules/notifications.module.ts`,
+  `src/modules/links.module.ts`, `src/types/notifications.types.ts`,
+  `src/types/links.types.ts`, `src/constants/namespaces.constants.ts`).
+- **4.3 Bundle size budget** — `scripts/check-size.mjs` fails `build` / CI if
+  `dist/sewa-sdk.min.js` grows past 30 kB gzipped (currently ~11 kB), and logs
+  the raw/gzipped sizes (`package.json`, `.github/workflows/ci.yml`).
+- **4.4 Source maps in `dist`** — `build:lib`/`build:cdn` emit `.map` files
+  for the CJS, ESM, and CDN bundles (references rewritten by
+  `scripts/rename-lib.mjs`), so production stack traces from the CDN build are
+  readable (`package.json`, `scripts/rename-lib.mjs`).
 
 Side fixes made while landing 4.2 (a green pipeline needs a green suite):
 

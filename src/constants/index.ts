@@ -2,8 +2,11 @@ export type { Namespace } from "./namespaces.constants";
 export {
   ACTIONS,
   CONNECTION_EVENTS,
+  HTTP_EVENTS,
+  LINKS_EVENTS,
   NAMESPACES,
   NAVIGATION_EVENTS,
+  NOTIFICATIONS_EVENTS,
   SDK_CAPABILITIES,
 } from "./namespaces.constants";
 export {

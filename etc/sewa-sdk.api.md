@@ -32,8 +32,7 @@ import { EventHandler } from '@lizuz/mini-app-types';
 import { FlagsSdkModule } from '@lizuz/mini-app-types';
 import { HostDescriptor } from '@lizuz/mini-app-types';
 import { HttpMethod } from '@lizuz/mini-app-types';
-import { HttpResult } from '@lizuz/mini-app-types';
-import { HttpSdkModule } from '@lizuz/mini-app-types';
+import type { HttpSdkModule as HttpSdkModule_2 } from '@lizuz/mini-app-types';
 import { LocaleState } from '@lizuz/mini-app-types';
 import { ModelCompletionOptions } from '@lizuz/mini-app-types';
 import { NavigationRouterResult } from '@lizuz/mini-app-types';
@@ -219,10 +218,25 @@ export interface HeartbeatOptions {
 
 export { HostDescriptor }
 
+// @public
+export const HTTP_EVENTS: {
+    readonly UPLOAD_PROGRESS: "http.uploadProgress";
+};
+
 // @public (undocumented)
 export interface HttpBodyRequest<TBody = unknown> extends HttpRequestBase {
     // (undocumented)
     body?: TBody;
+}
+
+// @public
+export class HttpClientError extends SdkError {
+    constructor(params: {
+        status: number;
+        message?: string;
+        details?: Record<string, unknown>;
+    });
+    readonly status: number;
 }
 
 // @public (undocumented)
@@ -238,6 +252,13 @@ export type HttpPatchParams<T = unknown> = HttpBodyRequest<T>;
 
 // @public (undocumented)
 export type HttpPostParams<T = unknown> = HttpBodyRequest<T>;
+
+// @public
+export interface HttpProgress {
+    totalBytes?: number;
+    // (undocumented)
+    uploadedBytes: number;
+}
 
 // @public (undocumented)
 export type HttpPutParams<T = unknown> = HttpBodyRequest<T>;
@@ -256,12 +277,72 @@ export interface HttpRequestBase {
     headers?: Headers_2;
 }
 
-export { HttpResult }
+// @public (undocumented)
+export interface HttpResult<T = unknown> {
+    // (undocumented)
+    data: T;
+    // (undocumented)
+    headers: Headers_2;
+    // (undocumented)
+    status: number;
+}
 
-export { HttpSdkModule }
+// @public (undocumented)
+export interface HttpSdkModule {
+    // (undocumented)
+    delete<T>(params: HttpDeleteParams): Promise<HttpResult<T>>;
+    // (undocumented)
+    get<T>(params: HttpGetParams): Promise<HttpResult<T>>;
+    getStream(params: HttpGetParams): Promise<StreamBuilder>;
+    // (undocumented)
+    patch<T, B = unknown>(params: HttpPatchParams<B>, options?: HttpUploadOptions): Promise<HttpResult<T>>;
+    // (undocumented)
+    post<T, B = unknown>(params: HttpPostParams<B>, options?: HttpUploadOptions): Promise<HttpResult<T>>;
+    // (undocumented)
+    put<T, B = unknown>(params: HttpPutParams<B>, options?: HttpUploadOptions): Promise<HttpResult<T>>;
+}
+
+// @public
+export class HttpServerError extends SdkError {
+    constructor(params: {
+        status: number;
+        message?: string;
+        details?: Record<string, unknown>;
+    });
+    readonly status: number;
+}
+
+// @public
+export interface HttpUploadOptions {
+    onProgress?: (progress: HttpProgress) => void;
+}
 
 // @public
 export function initMiniAppSdk(options: MiniAppSdkOptions): Promise<MiniAppSdk>;
+
+// @public
+export const LINKS_EVENTS: {
+    readonly OPENED: "links.opened";
+};
+
+// @public
+export interface LinksOpenedEvent {
+    params?: Record<string, unknown>;
+    // (undocumented)
+    url: string;
+}
+
+// @public
+export interface LinksOpenOptions {
+    inApp?: boolean;
+}
+
+// @public
+export interface LinksSdkModule {
+    isSupported(): boolean;
+    onOpen(handler: (event: LinksOpenedEvent) => void): () => void;
+    open(url: string, options?: LinksOpenOptions): Promise<void>;
+}
 
 export { LocaleState }
 
@@ -318,9 +399,13 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     readonly http: HttpSdkModule;
     initialize(): Promise<void>;
     // (undocumented)
+    readonly links: LinksSdkModule;
+    // (undocumented)
     readonly miniAppId: string;
     // (undocumented)
     readonly navigation: NavigationSdkModule;
+    // (undocumented)
+    readonly notifications: NotificationsSdkModule;
     on<K extends keyof SdkEventMap>(event: K, handler: (payload: SdkEventMap[K]) => void, options?: OnEventOptions): () => void;
     // (undocumented)
     on(event: string, handler: EventHandler, options?: OnEventOptions): () => void;
@@ -348,6 +433,8 @@ export interface MiniAppSdkDependencies {
     allowedOrigin?: string;
     // (undocumented)
     logger?: Logger;
+    // (undocumented)
+    tracer?: Tracer;
     // (undocumented)
     transport?: Transport;
 }
@@ -377,13 +464,15 @@ export interface MiniAppSdkInterface {
     getModule<T>(name: string): T | undefined;
     readonly hostDescriptor: HostDescriptor | null;
     // (undocumented)
-    http: HttpSdkModule;
+    http: HttpSdkModule_2;
     // (undocumented)
     initialize(): Promise<void>;
+    links: LinksSdkModule;
     // (undocumented)
     readonly miniAppId: string;
     // (undocumented)
     navigation: NavigationSdkModule;
+    notifications: NotificationsSdkModule;
     on<K extends keyof SdkEventMap>(event: K, handler: (payload: SdkEventMap[K]) => void, options?: OnEventOptions): () => void;
     // (undocumented)
     on(event: string, handler: EventHandler, options?: OnEventOptions): () => void;
@@ -453,6 +542,51 @@ export class NoopLogger implements Logger {
     info(): void;
     // (undocumented)
     warn(): void;
+}
+
+// @public
+export class NoopSpan implements Span {
+    constructor(name: string);
+    // (undocumented)
+    end(): void;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    setAttribute(): void;
+}
+
+// @public
+export const noopTracer: Tracer;
+
+// @public
+export interface NotificationOpenEvent {
+    data?: Record<string, unknown>;
+    url?: string;
+}
+
+// @public
+export const NOTIFICATIONS_EVENTS: {
+    readonly TOKEN: "notifications.token";
+    readonly OPENED: "notifications.opened";
+};
+
+// @public
+export interface NotificationsRegisterOptions {
+    requestPermission?: boolean;
+}
+
+// @public
+export interface NotificationsRegisterResult {
+    enabled: boolean;
+    token?: string;
+}
+
+// @public
+export interface NotificationsSdkModule {
+    isSupported(): boolean;
+    onOpen(handler: (event: NotificationOpenEvent) => void): () => void;
+    onToken(handler: (token: string) => void): () => void;
+    register(options?: NotificationsRegisterOptions): Promise<NotificationsRegisterResult>;
 }
 
 // @public
@@ -606,6 +740,7 @@ export type RpcNext<T> = () => Promise<T>;
 
 // @public
 export interface RpcRequestOptions {
+    mapPayload?: (payload: unknown) => unknown;
     signal?: AbortSignal;
 }
 
@@ -652,7 +787,7 @@ export class SdkError extends Error {
 }
 
 // @public
-export type SdkErrorCode = "TIMEOUT" | "TRANSPORT_NOT_STARTED" | "TRANSPORT_SEND_FAILED" | "HANDSHAKE_FAILED" | "HANDSHAKE_TIMEOUT" | "INVALID_MESSAGE" | "SDK_NOT_INITIALIZED" | "SDK_ALREADY_DESTROYED" | "REQUEST_CANCELLED" | "STREAM_CANCELLED" | "HOST_ERROR";
+export type SdkErrorCode = "TIMEOUT" | "TRANSPORT_NOT_STARTED" | "TRANSPORT_SEND_FAILED" | "HANDSHAKE_FAILED" | "HANDSHAKE_TIMEOUT" | "INVALID_MESSAGE" | "SDK_NOT_INITIALIZED" | "SDK_ALREADY_DESTROYED" | "REQUEST_CANCELLED" | "STREAM_CANCELLED" | "HTTP_CLIENT_ERROR" | "HTTP_SERVER_ERROR" | "HOST_ERROR";
 
 // @public (undocumented)
 export interface SdkErrorOptions {
@@ -678,16 +813,28 @@ export interface SdkEventMap {
     "connection.lost": {
         timestamp: number;
     };
+    "http.uploadProgress": HttpProgress;
+    "links.opened": LinksOpenedEvent;
     "navigation.back.requested": undefined;
     "navigation.route.changed": {
         previous: string;
         current: string;
         canGoBack: boolean;
     };
+    "notifications.opened": NotificationOpenEvent;
+    "notifications.token": string;
 }
 
 // @public
 export type SdkStatus = "initializing" | "ready" | "destroyed";
+
+// @public
+export interface Span {
+    end(): void;
+    // (undocumented)
+    readonly name: string;
+    setAttribute(key: string, value: unknown): void;
+}
 
 // @public
 export interface StorageSdkModule {
@@ -734,6 +881,11 @@ export { ThemeMode }
 export { ThemePreference }
 
 export { ThemeState }
+
+// @public
+export interface Tracer {
+    startSpan(name: string, context?: Record<string, unknown>): Span;
+}
 
 // @public
 export interface Transport {

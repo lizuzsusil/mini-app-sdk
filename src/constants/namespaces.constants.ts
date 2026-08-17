@@ -16,6 +16,8 @@ export const NAMESPACES = {
   HTTP: "http",
   APPEARANCE: "appearance",
   AI: "ai",
+  NOTIFICATIONS: "notifications",
+  LINKS: "links",
   EVENT: "event",
   HANDSHAKE: "handshake",
   HEARTBEAT: "heartbeat",
@@ -43,6 +45,8 @@ export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.HTTP,
   NAMESPACES.APPEARANCE,
   NAMESPACES.AI,
+  NAMESPACES.NOTIFICATIONS,
+  NAMESPACES.LINKS,
 ];
 
 /**
@@ -94,6 +98,7 @@ export const ACTIONS = {
     PUT: "put",
     PATCH: "patch",
     DELETE: "delete",
+    GET_STREAM: "getStream",
   },
   STORAGE: {
     GET: "get",
@@ -110,6 +115,12 @@ export const ACTIONS = {
   AI: {
     CHAT: "chat",
     CANCEL: "cancel",
+  },
+  NOTIFICATIONS: {
+    REGISTER: "register",
+  },
+  LINKS: {
+    OPEN: "open",
   },
   EVENT: {
     SUBSCRIBE: "subscribe",
@@ -150,4 +161,35 @@ export const NAVIGATION_EVENTS = {
 export const CONNECTION_EVENTS = {
   LOST: "connection.lost",
   ESTABLISHED: "connection.established",
+} as const;
+
+/**
+ * HTTP events on the wire. `UPLOAD_PROGRESS` (host → mini app) is how the
+ * host reports bytes-sent for an in-flight upload; `HttpSdkModule` mirrors
+ * it onto `HttpUploadOptions.onProgress`, and mini apps can also subscribe
+ * directly with `sdk.on("http.uploadProgress", …)`.
+ */
+export const HTTP_EVENTS = {
+  UPLOAD_PROGRESS: "http.uploadProgress",
+} as const;
+
+/**
+ * Notification events on the wire (host → mini app): `TOKEN` delivers the
+ * device push token once the host has it, `OPENED` fires when the user taps
+ * a push notification and the host resolves it into the mini app. Mini apps
+ * subscribe via `sdk.notifications.onToken` / `sdk.notifications.onOpen`, or
+ * directly with `sdk.on("notifications.token", …)`.
+ */
+export const NOTIFICATIONS_EVENTS = {
+  TOKEN: "notifications.token",
+  OPENED: "notifications.opened",
+} as const;
+
+/**
+ * Deep-link events on the wire (host → mini app): `OPENED` fires when the
+ * host resolves an incoming deep link into the mini app. Subscribe via
+ * `sdk.links.onOpen` or `sdk.on("links.opened", …)`.
+ */
+export const LINKS_EVENTS = {
+  OPENED: "links.opened",
 } as const;

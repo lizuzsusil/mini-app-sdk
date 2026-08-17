@@ -16,9 +16,11 @@ class ScriptedTransport implements Transport {
   readonly sent: PlatformMessage[] = [];
   private onMessage: ((message: PlatformMessage) => void) | null = null;
   private readonly platformType: string;
+  private readonly handshakeCapabilities?: string[];
 
-  constructor(platformType: string = "flutter") {
+  constructor(platformType: string = "flutter", capabilities?: string[]) {
     this.platformType = platformType;
+    this.handshakeCapabilities = capabilities;
   }
 
   start(onMessage: (message: PlatformMessage) => void): void {
@@ -33,7 +35,12 @@ class ScriptedTransport implements Transport {
     this.sent.push(message);
 
     if (message.type === "handshake") {
-      this.reply(message, { status: "ok" });
+      this.reply(
+        message,
+        this.handshakeCapabilities
+          ? { status: "ok", capabilities: this.handshakeCapabilities }
+          : { status: "ok" },
+      );
       return;
     }
     if (message.namespace === "platform" && message.action === "getType") {
@@ -463,5 +470,76 @@ describe("MiniAppSdk", () => {
     const late = vi.fn();
     sdk.on("appearance.theme.changed", late);
     expect(late).not.toHaveBeenCalled();
+  });
+
+  it("exposes the notifications and links modules end-to-end", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    const onToken = vi.fn();
+    const onNotificationOpen = vi.fn();
+    const onLinkOpen = vi.fn();
+    sdk.notifications.onToken(onToken);
+    sdk.notifications.onOpen(onNotificationOpen);
+    sdk.links.onOpen(onLinkOpen);
+
+    transport.deliverEvent("notifications", "token", "push-token-1");
+    expect(onToken).toHaveBeenCalledWith("push-token-1");
+
+    transport.deliverEvent("notifications", "opened", {
+      url: "https://example.com/a",
+      data: { campaign: "summer" },
+    });
+    expect(onNotificationOpen).toHaveBeenCalledWith({
+      url: "https://example.com/a",
+      data: { campaign: "summer" },
+    });
+
+    transport.deliverEvent("links", "opened", {
+      url: "https://example.com/x",
+      params: { ref: "push" },
+    });
+    expect(onLinkOpen).toHaveBeenCalledWith({
+      url: "https://example.com/x",
+      params: { ref: "push" },
+    });
+  });
+
+  it("routes notifications.register and links.open through their namespaces", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    const registerPromise = sdk.notifications.register({ requestPermission: true });
+    const registerRequest = transport.sent[transport.sent.length - 1]!;
+    expect(registerRequest.namespace).toBe("notifications");
+    expect(registerRequest.action).toBe("register");
+    transport.reply(registerRequest, { enabled: true, token: "tok" });
+    await expect(registerPromise).resolves.toMatchObject({
+      enabled: true,
+      token: "tok",
+    });
+
+    const openPromise = sdk.links.open("https://example.com/y", { inApp: false });
+    const openRequest = transport.sent[transport.sent.length - 1]!;
+    expect(openRequest.namespace).toBe("links");
+    expect(openRequest.action).toBe("open");
+    expect(openRequest.payload).toEqual({
+      url: "https://example.com/y",
+      inApp: false,
+    });
+    transport.reply(openRequest, undefined);
+    await expect(openPromise).resolves.toBeUndefined();
+  });
+
+  it("gates notifications and links on negotiated capabilities", async () => {
+    const transport = new ScriptedTransport("flutter", ["auth", "http"]);
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    expect(sdk.notifications.isSupported()).toBe(false);
+    expect(sdk.links.isSupported()).toBe(false);
+    expect(sdk.capabilities).toEqual(["auth", "http"]);
   });
 });

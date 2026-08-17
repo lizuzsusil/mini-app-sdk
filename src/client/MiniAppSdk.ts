@@ -23,13 +23,15 @@ import {
   createDeviceModule,
   createFlagsModule,
   createHttpModule,
+  createLinksModule,
   createNavigationModule,
+  createNotificationsModule,
   createPermissionsModule,
   createPlatformModule,
   createStorageModule,
   ModuleRegistry,
 } from "../modules";
-import type { RpcMetricsSnapshot } from "../observability";
+import type { RpcMetricsSnapshot, Tracer } from "../observability";
 import type { RpcMiddleware, RpcRequestOptions } from "../rpc";
 import { RpcClient } from "../rpc";
 import type { Transport } from "../transport";
@@ -45,9 +47,11 @@ import type {
   FlagsSdkModule,
   HostDescriptor,
   HttpSdkModule,
+  LinksSdkModule,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
   NavigationSdkModule,
+  NotificationsSdkModule,
   PermissionsSdkModule,
   PlatformSdkModule,
   PlatformTypeLiteral,
@@ -66,19 +70,21 @@ import { delay } from "../utils";
  * Extra, internal-only construction knobs. Deliberately **not** part of
  * `MiniAppSdkOptions` (the public, vendor-facing options type) — a vendor
  * mini-app developer configures `miniAppId`/`timeout`/`retryAttempts` the
- * same way they always have. `transport`, `logger`, and `allowedOrigin` are
- * for host SDKs and internal callers: `transport` to inject a non-default
- * delivery mechanism, `logger` to wire up real logging, and
+ * same way they always have. `transport`, `logger`, `allowedOrigin`, and
+ * `tracer` are for host SDKs and internal callers: `transport` to inject a
+ * non-default delivery mechanism, `logger` to wire up real logging,
  * `allowedOrigin` to pin `DefaultTransport` to a known host origin from the
  * start instead of learning it from the first message (see
- * `transport/DefaultTransport.ts`). `allowedOrigin` is ignored if a custom
- * `transport` is also provided — origin handling is that transport's own
- * concern at that point.
+ * `transport/DefaultTransport.ts`), and `tracer` to bridge RPC spans into
+ * a host's existing tracing setup (OpenTelemetry, ...). `allowedOrigin` is
+ * ignored if a custom `transport` is also provided — origin handling is that
+ * transport's own concern at that point.
  */
 export interface MiniAppSdkDependencies {
   transport?: Transport;
   logger?: Logger;
   allowedOrigin?: string;
+  tracer?: Tracer;
 }
 
 /** Upper bound on appearance hydration during `initialize()`. */
@@ -116,6 +122,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly http: HttpSdkModule;
   readonly ai: ChatSdkModule;
   readonly appearance: AppearanceSdkModule;
+  readonly notifications: NotificationsSdkModule;
+  readonly links: LinksSdkModule;
   readonly debug: SdkDebug;
 
   private readonly rpc: RpcClient;
@@ -166,14 +174,15 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       devMode,
       heartbeat: options.heartbeat,
       metrics: options.metrics,
+      tracer: dependencies.tracer,
     });
     this.traceId = this.rpc.getTraceId();
 
-    // The eight built-in modules are registered by name instead of being
-    // new'd directly, so `registerModule`/`getModule` work uniformly for
-    // built-ins and anything a host or vendor adds later. `platform` is
-    // registered separately below since its factory needs a slightly
-    // different shape (see `createPlatformModule`'s doc comment).
+    // The built-in modules are registered by name instead of being new'd
+    // directly, so `registerModule`/`getModule` work uniformly for built-ins
+    // and anything a host or vendor adds later. `platform` is registered
+    // separately below since its factory needs a slightly different shape
+    // (see `createPlatformModule`'s doc comment).
     this.registry.register(NAMESPACES.AUTH, createAuthModule);
     this.registry.register(NAMESPACES.PERMISSIONS, createPermissionsModule);
     this.registry.register(NAMESPACES.FLAGS, createFlagsModule);
@@ -184,6 +193,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.register(NAMESPACES.API, createApiModule);
     this.registry.register(NAMESPACES.HTTP, createHttpModule);
     this.registry.register(NAMESPACES.AI, createChatModule);
+    this.registry.register(NAMESPACES.NOTIFICATIONS, createNotificationsModule);
+    this.registry.register(NAMESPACES.LINKS, createLinksModule);
     this.registry.build(this.rpc);
 
     this.auth = this.requireModule<AuthSdkModule>(NAMESPACES.AUTH);
@@ -202,6 +213,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.api = this.requireModule<ApiSdkModule>(NAMESPACES.API);
     this.http = this.requireModule<HttpSdkModule>(NAMESPACES.HTTP);
     this.ai = this.requireModule<ChatSdkModule>(NAMESPACES.AI);
+    this.notifications = this.requireModule<NotificationsSdkModule>(
+      NAMESPACES.NOTIFICATIONS,
+    );
+    this.links = this.requireModule<LinksSdkModule>(NAMESPACES.LINKS);
 
     const platformHandle = createPlatformModule("web");
     this.platform = platformHandle.module;
@@ -456,11 +471,11 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   }
 
   /**
-   * Adds a module beyond the nine built-in ones — for a host-specific
-   * capability or a vendor's own namespace — without needing to fork the
-   * SDK. The factory receives the same `RpcClient` every built-in module
-   * uses, so a custom module gets retry, timeout, and middleware behavior
-   * for free. Retrieve it later with `getModule()`.
+   * Adds a module beyond the built-in ones — for a host-specific capability
+   * or a vendor's own namespace — without needing to fork the SDK. The
+   * factory receives the same `RpcClient` every built-in module uses, so a
+   * custom module gets retry, timeout, and middleware behavior for free.
+   * Retrieve it later with `getModule()`.
    *
    * ```ts
    * sdk.registerModule('payments', (rpc) => ({

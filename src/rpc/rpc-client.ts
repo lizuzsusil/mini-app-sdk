@@ -14,8 +14,13 @@ import {
 } from "../errors";
 import type { Logger } from "../logging";
 import { noopLogger } from "../logging";
-import type { RpcMetricsOptions, RpcMetricsSnapshot } from "../observability";
-import { MetricsRecorder } from "../observability";
+import type {
+  RpcMetricsOptions,
+  RpcMetricsSnapshot,
+  Span,
+  Tracer,
+} from "../observability";
+import { MetricsRecorder, noopTracer } from "../observability";
 import type {
   HandshakeAckPayload,
   HandshakePayload,
@@ -47,6 +52,14 @@ export interface RpcRequestOptions {
    * screens or navigating away without waiting for the timeout.
    */
   signal?: AbortSignal;
+  /**
+   * Optional transformation applied to the host's response **inside** the
+   * retry loop. Throwing from here — e.g. mapping an `HttpResult` carrying a
+   * 5xx `status` onto an `HttpServerError` — rejects the request and, when
+   * the thrown error is `retryable`, participates in the normal retry policy
+   * exactly like any other request failure.
+   */
+  mapPayload?: (payload: unknown) => unknown;
 }
 
 /** Per-stream control knobs passed to `sendStreamRequest()`. */
@@ -76,6 +89,12 @@ export interface RpcClientOptions {
   heartbeat?: HeartbeatOptions;
   /** Tuning for the request metrics recorder (percentile window, export hook). */
   metrics?: RpcMetricsOptions;
+  /**
+   * Optional tracer for RPC observability. When omitted, a no-op tracer is
+   * used and behavior is unchanged. See `observability/tracer.types.ts` for
+   * the minimal `Tracer`/`Span` contract.
+   */
+  tracer?: Tracer;
 }
 
 interface PendingRequest {
@@ -141,6 +160,7 @@ export class RpcClient {
   private readonly streamConsumers = new Map<string, StreamRecord>();
   private readonly middlewares: RpcMiddleware[] = [];
   private readonly metricsRecorder: MetricsRecorder;
+  private readonly tracer: Tracer;
   private readonly warnedUnavailableCapabilities = new Set<string>();
   private readonly traceId: string;
   private started = false;
@@ -185,6 +205,7 @@ export class RpcClient {
     this.devMode = options.devMode ?? false;
     this.heartbeatOptions = options.heartbeat ?? null;
     this.metricsRecorder = new MetricsRecorder(options.metrics);
+    this.tracer = options.tracer ?? noopTracer;
     this.traceId = generateId();
   }
 
@@ -245,6 +266,18 @@ export class RpcClient {
    * of silently proceeding with a connection that won't actually work.
    */
   async handshake(): Promise<void> {
+    const span = this.tracer.startSpan("rpc.handshake", {
+      miniAppId: this.miniAppId,
+      traceId: this.traceId,
+    });
+    try {
+      await this.performHandshake();
+    } finally {
+      span.end();
+    }
+  }
+
+  private async performHandshake(): Promise<void> {
     const payload: HandshakePayload = {
       miniAppId: this.miniAppId,
       sdkVersion: RPC_CLIENT_SDK_VERSION,
@@ -312,6 +345,11 @@ export class RpcClient {
    * described on `executeWithRetry`. An optional `AbortSignal` in `options`
    * cancels the request (including any queued retries) with a
    * `RequestCancelledError` as soon as it fires.
+   *
+   * A span named `rpc.request` is started for the whole composed call (one
+   * span per logical request, wrapping the retry loop — same granularity as
+   * the middleware chain) and annotated with the namespace, action, and any
+   * terminal error.
    */
   async request<T>(
     namespace: string,
@@ -320,12 +358,33 @@ export class RpcClient {
     options?: RpcRequestOptions,
   ): Promise<T> {
     this.warnOnUnavailableCapability(namespace, action);
-    return composeMiddleware<T>(
-      this.middlewares,
-      { namespace, action, payload, attempt: 0 },
-      () =>
-        this.executeWithRetry<T>(namespace, action, payload, options?.signal),
-    );
+    const span = this.tracer.startSpan("rpc.request", {
+      namespace,
+      action,
+      traceId: this.traceId,
+    });
+    try {
+      return await composeMiddleware<T>(
+        this.middlewares,
+        { namespace, action, payload, attempt: 0 },
+        () =>
+          this.executeWithRetry<T>(namespace, action, payload, options, span),
+      );
+    } catch (error) {
+      span.setAttribute(
+        "error",
+        error instanceof Error ? error.message : String(error),
+      );
+      span.setAttribute(
+        "retryable",
+        error instanceof Error && "retryable" in error
+          ? Boolean((error as { retryable?: boolean }).retryable)
+          : false,
+      );
+      throw error;
+    } finally {
+      span.end();
+    }
   }
 
   /**
@@ -361,16 +420,17 @@ export class RpcClient {
     namespace: string,
     action: string,
     payload?: unknown,
-    signal?: AbortSignal,
+    options?: RpcRequestOptions,
+    span?: Span,
   ): Promise<T> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= this.retryAttempts; attempt++) {
-      if (signal?.aborted) {
+      if (options?.signal?.aborted) {
         throw new RequestCancelledError({
           namespace,
           action,
-          cause: signal.reason,
+          cause: options.signal.reason,
         });
       }
 
@@ -380,14 +440,17 @@ export class RpcClient {
           namespace,
           action,
           payload,
-          signal,
+          options?.signal,
         );
+        const mapped = options?.mapPayload
+          ? (options.mapPayload(result) as T)
+          : result;
         this.metricsRecorder.recordSuccess(
           namespace,
           action,
           Date.now() - startedAt,
         );
-        return result;
+        return mapped;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         const wasTimeout = lastError instanceof TimeoutError;
@@ -405,11 +468,12 @@ export class RpcClient {
         if (!retryable) throw lastError;
         if (attempt < this.retryAttempts) {
           this.metricsRecorder.recordRetry(namespace, action);
+          span?.setAttribute("retryCount", attempt + 1);
           await this.abortAwareDelay(
             computeBackoffMs(attempt, this.retryDelayMs, this.maxRetryDelayMs),
             namespace,
             action,
-            signal,
+            options?.signal,
           );
         }
       }
@@ -505,6 +569,12 @@ export class RpcClient {
     this.streamConsumers.set(message.requestId, { builder, namespace, action });
     builder.onCancel = () => this.notifyHostStreamCancelled(message.requestId);
 
+    const span = this.tracer.startSpan("rpc.stream", {
+      namespace,
+      action,
+      traceId: this.traceId,
+    });
+
     const onAbort = (): void => {
       this.cancelStreamBuilder(
         message.requestId,
@@ -538,7 +608,21 @@ export class RpcClient {
       );
     }
 
-    builder.waitUntilDone().then(cleanup, cleanup);
+    builder.waitUntilDone().then(
+      () => {
+        cleanup();
+        span.setAttribute("bytes", builder.receivedBytes);
+        span.end();
+      },
+      (error: unknown) => {
+        cleanup();
+        span.setAttribute(
+          "error",
+          error instanceof Error ? error.message : String(error),
+        );
+        span.end();
+      },
+    );
 
     if (signal) {
       if (signal.aborted) {

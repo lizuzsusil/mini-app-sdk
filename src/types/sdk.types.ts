@@ -17,6 +17,8 @@ import type { TransportDebugInfo } from "../transport";
 import type { ChatSdkModule } from "./chat.types";
 import type { OnEventOptions, SdkEventMap } from "./common.types";
 import type { DeviceSdkModuleWithGuards } from "./device.types";
+import type { LinksSdkModule } from "./links.types";
+import type { NotificationsSdkModule } from "./notifications.types";
 import type { StorageSdkModule } from "./storage.types";
 
 /** A single request currently awaiting a host reply, for debug snapshots. */
@@ -65,7 +67,7 @@ export interface SdkDebug {
 
 /**
  * The full public shape of a `MiniAppSdk` instance — this is the contract
- * vendor mini apps code against: eight domain modules plus lifecycle,
+ * vendor mini apps code against: the domain modules plus lifecycle,
  * event-subscription, and extensibility methods.
  */
 export interface MiniAppSdkInterface {
@@ -94,6 +96,10 @@ export interface MiniAppSdkInterface {
   api: ApiSdkModule;
   http: HttpSdkModule;
   ai: ChatSdkModule;
+  /** Push notifications: permission/token registration plus tap events. */
+  notifications: NotificationsSdkModule;
+  /** Deep links: open external URLs and subscribe to inbound link resolution. */
+  links: LinksSdkModule;
   /** Runtime introspection: `debug.snapshot()` returns a serializable view of this instance. */
   readonly debug: SdkDebug;
 

@@ -6,8 +6,11 @@ export type { MiniAppSdkDependencies } from "./client";
 export { MiniAppSdk } from "./client";
 export {
   CONNECTION_EVENTS,
+  HTTP_EVENTS,
+  LINKS_EVENTS,
   MESSAGE_CHANNEL,
   NAVIGATION_EVENTS,
+  NOTIFICATIONS_EVENTS,
   PLATFORM_EVENT_NAME,
   PROTOCOL_VERSION,
 } from "./constants";
@@ -17,6 +20,8 @@ export type {
   SdkErrorOptions,
 } from "./errors";
 export {
+  HttpClientError,
+  HttpServerError,
   RequestCancelledError,
   SdkError,
   StreamCancelledError,
@@ -30,7 +35,10 @@ export type {
   DurationPercentiles,
   RpcMetricsOptions,
   RpcMetricsSnapshot,
+  Span,
+  Tracer,
 } from "./observability";
+export { NoopSpan, noopTracer } from "./observability";
 export type {
   MessageType,
   PlatformError,
@@ -86,11 +94,16 @@ export type {
   HttpMethod,
   HttpPatchParams,
   HttpPostParams,
+  HttpProgress,
   HttpPutParams,
   HttpQueryRequest,
   HttpRequestBase,
   HttpResult,
   HttpSdkModule,
+  HttpUploadOptions,
+  LinksOpenedEvent,
+  LinksOpenOptions,
+  LinksSdkModule,
   LocaleState,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
@@ -101,6 +114,10 @@ export type {
   NavigationSdkModule,
   NavigationState,
   NavigationTarget,
+  NotificationOpenEvent,
+  NotificationsRegisterOptions,
+  NotificationsRegisterResult,
+  NotificationsSdkModule,
   OnEventOptions,
   PendingRequestInfo,
   PermissionsSdkModule,

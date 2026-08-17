@@ -1,4 +1,7 @@
 import type { LocaleState, ThemeState } from "@lizuz/mini-app-types";
+import type { HttpProgress } from "./http.types";
+import type { LinksOpenedEvent } from "./links.types";
+import type { NotificationOpenEvent } from "./notifications.types";
 
 /** Generic event handler signature used by `MiniAppSdk.on()`. */
 export type EventHandler<TPayload = unknown> = (payload: TPayload) => void;
@@ -27,6 +30,14 @@ export interface SdkEventMap {
   "connection.lost": { timestamp: number };
   /** Emitted after a successful reconnect handshake. */
   "connection.established": { timestamp: number };
+  /** Host → mini app: upload progress for an in-flight `http.post`/`put`/`patch`. */
+  "http.uploadProgress": HttpProgress;
+  /** Host → mini app: the device push token was delivered or refreshed. */
+  "notifications.token": string;
+  /** Host → mini app: the user tapped a push notification the host resolved into the mini app. */
+  "notifications.opened": NotificationOpenEvent;
+  /** Host → mini app: a deep link was resolved into this mini app. */
+  "links.opened": LinksOpenedEvent;
 }
 
 /** Options for `MiniAppSdk.on()` / `RpcClient.onEvent()`. */

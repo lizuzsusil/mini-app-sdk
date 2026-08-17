@@ -16,6 +16,8 @@ export type SdkErrorCode =
   | "SDK_ALREADY_DESTROYED"
   | "REQUEST_CANCELLED"
   | "STREAM_CANCELLED"
+  | "HTTP_CLIENT_ERROR"
+  | "HTTP_SERVER_ERROR"
   | "HOST_ERROR";
 
 export interface SdkErrorOptions {

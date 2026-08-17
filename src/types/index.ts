@@ -36,8 +36,6 @@ export type {
   FlagsSdkModule,
   HostDescriptor,
   HttpMethod,
-  HttpResult,
-  HttpSdkModule,
   LocaleState,
   ModelCompletionOptions,
   NavigationRouterResult,
@@ -75,11 +73,26 @@ export type {
   HttpGetParams,
   HttpPatchParams,
   HttpPostParams,
+  HttpProgress,
   HttpPutParams,
   HttpQueryRequest,
   HttpRequestBase,
+  HttpResult,
+  HttpSdkModule,
+  HttpUploadOptions,
   Query,
 } from "./http.types";
+export type {
+  LinksOpenedEvent,
+  LinksOpenOptions,
+  LinksSdkModule,
+} from "./links.types";
+export type {
+  NotificationOpenEvent,
+  NotificationsRegisterOptions,
+  NotificationsRegisterResult,
+  NotificationsSdkModule,
+} from "./notifications.types";
 export type {
   HeartbeatOptions,
   MiniAppSdkInterface,
