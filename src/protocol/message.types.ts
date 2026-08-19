@@ -26,8 +26,8 @@ export interface PlatformError {
 
 /**
  * The single envelope shape every message — in either direction — must
- * conform to. Field names and meanings are frozen for protocol version
- * "3.0.0"; do not change without a protocol version bump.
+ * conform to. Field names and meanings are frozen for the current
+ * `PROTOCOL_VERSION`; do not change without a protocol version bump.
  */
 export interface PlatformMessage<TPayload = unknown> {
   channel: string;

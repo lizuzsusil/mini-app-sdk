@@ -6,6 +6,7 @@ import {
   PROTOCOL_VERSION,
   SDK_CAPABILITIES,
 } from "../constants";
+import { RPC_CLIENT_SDK_VERSION } from "../constants/version.generated";
 import {
   HandshakeError,
   ProtocolError,
@@ -124,14 +125,6 @@ const DEFAULT_MAX_MISSED_PONGS = 2;
 
 /** How many recent payloads per event the replay buffer retains. */
 const EVENT_REPLAY_BUFFER_SIZE = 5;
-
-/**
- * The SDK package version reported during handshake. Kept separate from
- * `PROTOCOL_VERSION` because the *SDK* version and the *wire protocol*
- * version are conceptually different axes, even though they share a value
- * in this release.
- */
-const RPC_CLIENT_SDK_VERSION = "3.0.0";
 
 /**
  * Owns everything about *RPC semantics* as opposed to *message delivery*:
