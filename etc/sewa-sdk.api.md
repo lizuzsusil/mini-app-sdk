@@ -32,7 +32,10 @@ import { EventHandler } from '@lizuz/mini-app-types';
 import { FlagsSdkModule } from '@lizuz/mini-app-types';
 import { HostDescriptor } from '@lizuz/mini-app-types';
 import { HttpMethod } from '@lizuz/mini-app-types';
-import type { HttpSdkModule as HttpSdkModule_2 } from '@lizuz/mini-app-types';
+import { HttpSdkModule } from '@lizuz/mini-app-types';
+import { LinksOpenedEvent } from '@lizuz/mini-app-types';
+import { LinksOpenOptions } from '@lizuz/mini-app-types';
+import { LinksSdkModule } from '@lizuz/mini-app-types';
 import { LocaleState } from '@lizuz/mini-app-types';
 import { ModelCompletionOptions } from '@lizuz/mini-app-types';
 import { NavigationRouterResult } from '@lizuz/mini-app-types';
@@ -40,10 +43,16 @@ import { NavigationRouterSkdModule } from '@lizuz/mini-app-types';
 import { NavigationSdkModule } from '@lizuz/mini-app-types';
 import { NavigationState } from '@lizuz/mini-app-types';
 import { NavigationTarget } from '@lizuz/mini-app-types';
+import { NotificationOpenEvent } from '@lizuz/mini-app-types';
+import { NotificationsRegisterOptions } from '@lizuz/mini-app-types';
+import { NotificationsRegisterResult } from '@lizuz/mini-app-types';
+import { NotificationsSdkModule } from '@lizuz/mini-app-types';
 import { PermissionsSdkModule } from '@lizuz/mini-app-types';
 import { PlatformSdkModule } from '@lizuz/mini-app-types';
 import { PlatformTypeLiteral } from '@lizuz/mini-app-types';
 import { PlatformUser } from '@lizuz/mini-app-types';
+import { StorageSdkModule } from '@lizuz/mini-app-types';
+import { StorageSetOptions } from '@lizuz/mini-app-types';
 import { StreamChunk } from '@lizuz/mini-app-types';
 import { StreamError } from '@lizuz/mini-app-types';
 import { ThemeMode } from '@lizuz/mini-app-types';
@@ -287,20 +296,7 @@ export interface HttpResult<T = unknown> {
     status: number;
 }
 
-// @public (undocumented)
-export interface HttpSdkModule {
-    // (undocumented)
-    delete<T>(params: HttpDeleteParams): Promise<HttpResult<T>>;
-    // (undocumented)
-    get<T>(params: HttpGetParams): Promise<HttpResult<T>>;
-    getStream(params: HttpGetParams): Promise<StreamBuilder>;
-    // (undocumented)
-    patch<T, B = unknown>(params: HttpPatchParams<B>, options?: HttpUploadOptions): Promise<HttpResult<T>>;
-    // (undocumented)
-    post<T, B = unknown>(params: HttpPostParams<B>, options?: HttpUploadOptions): Promise<HttpResult<T>>;
-    // (undocumented)
-    put<T, B = unknown>(params: HttpPutParams<B>, options?: HttpUploadOptions): Promise<HttpResult<T>>;
-}
+export { HttpSdkModule }
 
 // @public
 export class HttpServerError extends SdkError {
@@ -325,24 +321,11 @@ export const LINKS_EVENTS: {
     readonly OPENED: "links.opened";
 };
 
-// @public
-export interface LinksOpenedEvent {
-    params?: Record<string, unknown>;
-    // (undocumented)
-    url: string;
-}
+export { LinksOpenedEvent }
 
-// @public
-export interface LinksOpenOptions {
-    inApp?: boolean;
-}
+export { LinksOpenOptions }
 
-// @public
-export interface LinksSdkModule {
-    isSupported(): boolean;
-    onOpen(handler: (event: LinksOpenedEvent) => void): () => void;
-    open(url: string, options?: LinksOpenOptions): Promise<void>;
-}
+export { LinksSdkModule }
 
 export { LocaleState }
 
@@ -464,7 +447,7 @@ export interface MiniAppSdkInterface {
     getModule<T>(name: string): T | undefined;
     readonly hostDescriptor: HostDescriptor | null;
     // (undocumented)
-    http: HttpSdkModule_2;
+    http: HttpSdkModule;
     // (undocumented)
     initialize(): Promise<void>;
     links: LinksSdkModule;
@@ -558,11 +541,7 @@ export class NoopSpan implements Span {
 // @public
 export const noopTracer: Tracer;
 
-// @public
-export interface NotificationOpenEvent {
-    data?: Record<string, unknown>;
-    url?: string;
-}
+export { NotificationOpenEvent }
 
 // @public
 export const NOTIFICATIONS_EVENTS: {
@@ -570,24 +549,11 @@ export const NOTIFICATIONS_EVENTS: {
     readonly OPENED: "notifications.opened";
 };
 
-// @public
-export interface NotificationsRegisterOptions {
-    requestPermission?: boolean;
-}
+export { NotificationsRegisterOptions }
 
-// @public
-export interface NotificationsRegisterResult {
-    enabled: boolean;
-    token?: string;
-}
+export { NotificationsRegisterResult }
 
-// @public
-export interface NotificationsSdkModule {
-    isSupported(): boolean;
-    onOpen(handler: (event: NotificationOpenEvent) => void): () => void;
-    onToken(handler: (token: string) => void): () => void;
-    register(options?: NotificationsRegisterOptions): Promise<NotificationsRegisterResult>;
-}
+export { NotificationsSdkModule }
 
 // @public
 export interface OnEventOptions {
@@ -836,20 +802,9 @@ export interface Span {
     setAttribute(key: string, value: unknown): void;
 }
 
-// @public
-export interface StorageSdkModule {
-    get(key: string): Promise<string | null>;
-    getJson<T = unknown>(key: string): Promise<T | null>;
-    remove(key: string): Promise<void>;
-    scoped(prefix: string): StorageSdkModule;
-    set(key: string, value: string, options?: StorageSetOptions): Promise<void>;
-    setJson(key: string, value: unknown, options?: StorageSetOptions): Promise<void>;
-}
+export { StorageSdkModule }
 
-// @public
-export interface StorageSetOptions {
-    ttlMs?: number;
-}
+export { StorageSetOptions }
 
 // @public
 export class StreamBuilder {
