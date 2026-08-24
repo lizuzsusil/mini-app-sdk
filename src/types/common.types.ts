@@ -1,7 +1,10 @@
-import type { LocaleState, ThemeState } from "@lizuz/mini-app-types";
+import type {
+  LinksOpenedEvent,
+  LocaleState,
+  NotificationOpenEvent,
+  ThemeState,
+} from "@lizuz/mini-app-types";
 import type { HttpProgress } from "./http.types";
-import type { LinksOpenedEvent } from "./links.types";
-import type { NotificationOpenEvent } from "./notifications.types";
 
 /** Generic event handler signature used by `MiniAppSdk.on()`. */
 export type EventHandler<TPayload = unknown> = (payload: TPayload) => void;

@@ -6,10 +6,13 @@ import type {
   FlagsSdkModule,
   HostDescriptor,
   HttpSdkModule,
+  LinksSdkModule,
   NavigationSdkModule,
+  NotificationsSdkModule,
   PermissionsSdkModule,
   PlatformSdkModule,
   PlatformTypeLiteral,
+  StorageSdkModule,
 } from "@lizuz/mini-app-types";
 import type { RpcMetricsOptions, RpcMetricsSnapshot } from "../observability";
 import type { RpcClient, RpcMiddleware, RpcRequestOptions } from "../rpc";
@@ -17,9 +20,6 @@ import type { TransportDebugInfo } from "../transport";
 import type { ChatSdkModule } from "./chat.types";
 import type { OnEventOptions, SdkEventMap } from "./common.types";
 import type { DeviceSdkModuleWithGuards } from "./device.types";
-import type { LinksSdkModule } from "./links.types";
-import type { NotificationsSdkModule } from "./notifications.types";
-import type { StorageSdkModule } from "./storage.types";
 
 /** A single request currently awaiting a host reply, for debug snapshots. */
 export interface PendingRequestInfo {

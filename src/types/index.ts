@@ -36,6 +36,10 @@ export type {
   FlagsSdkModule,
   HostDescriptor,
   HttpMethod,
+  HttpSdkModule,
+  LinksOpenedEvent,
+  LinksOpenOptions,
+  LinksSdkModule,
   LocaleState,
   ModelCompletionOptions,
   NavigationRouterResult,
@@ -44,10 +48,16 @@ export type {
   NavigationSdkModule,
   NavigationState,
   NavigationTarget,
+  NotificationOpenEvent,
+  NotificationsRegisterOptions,
+  NotificationsRegisterResult,
+  NotificationsSdkModule,
   PermissionsSdkModule,
   PlatformSdkModule,
   PlatformTypeLiteral,
   PlatformUser,
+  StorageSdkModule,
+  StorageSetOptions,
   StreamChunk,
   StreamError,
   ThemeMode,
@@ -78,21 +88,9 @@ export type {
   HttpQueryRequest,
   HttpRequestBase,
   HttpResult,
-  HttpSdkModule,
   HttpUploadOptions,
   Query,
 } from "./http.types";
-export type {
-  LinksOpenedEvent,
-  LinksOpenOptions,
-  LinksSdkModule,
-} from "./links.types";
-export type {
-  NotificationOpenEvent,
-  NotificationsRegisterOptions,
-  NotificationsRegisterResult,
-  NotificationsSdkModule,
-} from "./notifications.types";
 export type {
   HeartbeatOptions,
   MiniAppSdkInterface,
@@ -102,7 +100,3 @@ export type {
   SdkDebugSnapshot,
   SdkStatus,
 } from "./sdk.types";
-export type {
-  StorageSdkModule,
-  StorageSetOptions,
-} from "./storage.types";

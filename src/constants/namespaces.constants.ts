@@ -98,6 +98,7 @@ export const ACTIONS = {
     PUT: "put",
     PATCH: "patch",
     DELETE: "delete",
+    STREAM: "stream",
     GET_STREAM: "getStream",
   },
   STORAGE: {

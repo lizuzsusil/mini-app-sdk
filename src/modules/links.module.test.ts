@@ -16,13 +16,13 @@ describe("links module", () => {
   it("reports supported when the links namespace was negotiated", () => {
     const { module } = makeModule(["links", "auth"]);
 
-    expect(module.isSupported()).toBe(true);
+    expect(module.isSupported).toBe(true);
   });
 
   it("reports unsupported when the links namespace was not negotiated", () => {
     const { module } = makeModule(["auth"]);
 
-    expect(module.isSupported()).toBe(false);
+    expect(module.isSupported).toBe(false);
   });
 
   it("opens a URL with the host", async () => {

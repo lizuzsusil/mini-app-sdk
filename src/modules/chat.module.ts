@@ -30,8 +30,8 @@ export function createChatModule(rpc: RpcClient): ChatSdkModule {
   return {
     chat(messages, options, requestOptions?: ChatRequestOptions) {
       return rpc.sendStreamRequest(
-        NAMESPACES.AI,
-        ACTIONS.AI.CHAT,
+        NAMESPACES.HTTP,
+        ACTIONS.HTTP.STREAM,
         { messages, options },
         requestOptions,
       );

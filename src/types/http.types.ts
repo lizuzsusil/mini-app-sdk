@@ -61,10 +61,22 @@ export interface HttpSdkModule {
   ): Promise<HttpResult<T>>;
   delete<T>(params: HttpDeleteParams): Promise<HttpResult<T>>;
   /**
+   * A streamed request for AI chat: routed through `http.stream` instead of
+   * `ai.chat`. Returns a `StreamBuilder` that chunks the response and supports
+   * cancellation via `builder.cancel()` or an `AbortSignal` in options.
+   */
+  stream(params: {
+    messages: import("../types").ChatMessage[];
+    options?: import("@lizuz/mini-app-types").ModelCompletionOptions;
+    requestOptions?: import("../types").ChatRequestOptions;
+  }): Promise<StreamBuilder & AsyncIterable<string | Uint8Array>>;
+  /**
    * A streamed GET for large downloads or SSE: routed through the same
    * stream machinery as `ai.chat`, so the response arrives chunk-by-chunk
    * and the returned `StreamBuilder` reports progress and supports
    * cancellation.
    */
-  getStream(params: HttpGetParams): Promise<StreamBuilder>;
+  getStream(
+    params: HttpGetParams,
+  ): Promise<StreamBuilder & AsyncIterable<string | Uint8Array>>;
 }

@@ -8,7 +8,7 @@ import type {
 
 export function createLinksModule(rpc: RpcClient): LinksSdkModule {
   return {
-    isSupported: () => rpc.getCapabilities().includes(NAMESPACES.LINKS),
+    isSupported: rpc.getCapabilities().includes(NAMESPACES.LINKS),
     open: (url: string, options?: LinksOpenOptions) =>
       rpc.request<void>(NAMESPACES.LINKS, ACTIONS.LINKS.OPEN, {
         url,

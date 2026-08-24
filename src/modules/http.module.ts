@@ -1,7 +1,6 @@
-import { ACTIONS, HTTP_EVENTS, NAMESPACES } from "../constants";
-import { HttpClientError, HttpServerError } from "../errors";
-import type { RpcClient } from "../rpc";
 import type {
+  ChatMessage,
+  ChatRequestOptions,
   HttpDeleteParams,
   HttpGetParams,
   HttpPatchParams,
@@ -11,7 +10,11 @@ import type {
   HttpResult,
   HttpSdkModule,
   HttpUploadOptions,
-} from "../types";
+  ModelCompletionOptions,
+} from "@lizuz/mini-app-types";
+import { ACTIONS, HTTP_EVENTS, NAMESPACES } from "../constants";
+import { HttpClientError, HttpServerError } from "../errors";
+import type { RpcClient } from "../rpc";
 
 /**
  * Shared response mapper for every non-streaming verb: turns an `HttpResult`
@@ -97,7 +100,21 @@ export function createHttpModule(rpc: RpcClient): HttpSdkModule {
         mapPayload: mapHttpResult,
       }),
 
-    getStream: (params: HttpGetParams) =>
-      rpc.sendStreamRequest(NAMESPACES.HTTP, ACTIONS.HTTP.GET_STREAM, params),
+    getStream: <T = unknown>(params: HttpGetParams) =>
+      rpc.sendStreamRequest(
+        NAMESPACES.HTTP,
+        ACTIONS.HTTP.GET_STREAM,
+        params,
+      ) as Promise<T>,
+    stream: <T = unknown>(params: {
+      messages: ChatMessage[];
+      options?: ModelCompletionOptions;
+      requestOptions?: ChatRequestOptions;
+    }) =>
+      rpc.sendStreamRequest(
+        NAMESPACES.HTTP,
+        ACTIONS.HTTP.STREAM,
+        params,
+      ) as Promise<T>,
   };
 }
