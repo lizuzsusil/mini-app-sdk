@@ -18,8 +18,8 @@ describe("chat module", () => {
     await expect(module.chat(messages, options)).resolves.toBe(builder);
 
     expect(sendStreamRequest).toHaveBeenCalledWith(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.STREAM,
       { messages, options },
       undefined,
     );
@@ -33,8 +33,8 @@ describe("chat module", () => {
     await module.chat([{ role: "system", content: "You are helpful" }]);
 
     expect(sendStreamRequest).toHaveBeenCalledWith(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.STREAM,
       {
         messages: [{ role: "system", content: "You are helpful" }],
         options: undefined,
@@ -54,8 +54,8 @@ describe("chat module", () => {
     await module.chat(messages, undefined, { signal: controller.signal });
 
     expect(sendStreamRequest).toHaveBeenCalledWith(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.STREAM,
       { messages, options: undefined },
       { signal: controller.signal },
     );
@@ -104,8 +104,8 @@ describe("chat stream cancellation", () => {
     // abort), which is exercised in rpc-client.test.ts — this just proves the
     // module threads the signal through untouched.
     expect(sendStreamRequest).toHaveBeenCalledWith(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.STREAM,
       { messages: [ChatMessages.user("hi")], options: undefined },
       { signal: controller.signal },
     );
@@ -122,7 +122,7 @@ describe("chat stream cancellation", () => {
     await expect(done).resolves.toBe(builder);
 
     builder.cancel(
-      new RequestCancelledError({ namespace: NAMESPACES.AI, action: "chat" }),
+      new RequestCancelledError({ namespace: NAMESPACES.HTTP, action: "chat" }),
     );
     await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(
       RequestCancelledError,

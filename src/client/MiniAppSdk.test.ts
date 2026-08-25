@@ -539,7 +539,7 @@ describe("MiniAppSdk", () => {
     await sdk.initialize();
 
     expect(sdk.notifications.isSupported()).toBe(false);
-    expect(sdk.links.isSupported()).toBe(false);
+    expect(sdk.links.isSupported).toBe(false);
     expect(sdk.capabilities).toEqual(["auth", "http"]);
   });
 });
