@@ -4,4 +4,4 @@
  * handshake via the "sdkVersion" field. Generated from "package.json" so it
  * can never drift from the published release.
  */
-export const RPC_CLIENT_SDK_VERSION = "1.0.7";
+export const RPC_CLIENT_SDK_VERSION = "1.0.8";
