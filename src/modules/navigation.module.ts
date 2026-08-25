@@ -57,7 +57,7 @@ function createNavigationRouter(rpc: RpcClient): NavigationRouterSdkModule {
     async back(consumed = true): Promise<NavigationRouterResult> {
       const raw = await rpc.request<unknown>(
         NAMESPACES.NAVIGATION,
-        ACTIONS.NAVIGATION.BACK,
+        ACTIONS.NAVIGATION.ROUTER,
         { consumed },
       );
       return toRouterResult(raw, consumed);
@@ -70,7 +70,7 @@ function createNavigationRouter(rpc: RpcClient): NavigationRouterSdkModule {
     async push(consumed = true): Promise<NavigationRouterResult> {
       const raw = await rpc.request<unknown>(
         NAMESPACES.NAVIGATION,
-        ACTIONS.NAVIGATION.PUSH,
+        ACTIONS.NAVIGATION.ROUTER,
         { consumed },
       );
       return toRouterResult(raw, consumed);

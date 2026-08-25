@@ -74,8 +74,7 @@ export const ACTIONS = {
   NAVIGATION: {
     NAVIGATE: "navigate",
     GET_CURRENT: "getCurrent",
-    BACK: "back",
-    PUSH: "push",
+    ROUTER: "router",
   },
   PLATFORM: {
     GET_TYPE: "getType",
