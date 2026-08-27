@@ -1,3 +1,12 @@
+export {
+  getErrorCode,
+  isAuthError,
+  isHandshakeError,
+  isRetryable,
+  isSdkError,
+  isTimeout,
+  isTransportError,
+} from "./guards";
 export { HandshakeError } from "./handshake-error";
 export { HttpClientError } from "./http-client-error";
 export { HttpServerError } from "./http-server-error";

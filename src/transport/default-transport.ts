@@ -1,9 +1,13 @@
-import { BROADCAST_TARGET, PLATFORM_EVENT_NAME } from "../constants";
+import {
+  BROADCAST_TARGET,
+  MESSAGE_CHANNEL,
+  PLATFORM_EVENT_NAME,
+} from "../constants";
 import { TransportError } from "../errors";
 import type { Logger } from "../logging";
 import { noopLogger } from "../logging";
 import type { PlatformMessage } from "../protocol";
-import { isValidPlatformMessage } from "../protocol";
+import { isValidPlatformMessage, validatePlatformMessage } from "../protocol";
 import type { Transport, TransportDebugInfo } from "./transport";
 
 export interface DefaultTransportOptions {
@@ -74,7 +78,23 @@ export class DefaultTransport implements Transport {
         });
         return;
       }
-      if (!isValidPlatformMessage(event.data)) return;
+      if (!isValidPlatformMessage(event.data)) {
+        // In dev, surface validation reason when the message at least looks
+        // like an SDK message (has the channel). Avoid noise from unrelated
+        // postMessage traffic on the same window.
+        const data = event.data as Record<string, unknown> | null;
+        if (
+          data &&
+          typeof data === "object" &&
+          (data as Record<string, unknown>).channel === MESSAGE_CHANNEL
+        ) {
+          const result = validatePlatformMessage(event.data);
+          this.logger.debug("Dropped invalid SDK message", {
+            reason: result.reason,
+          });
+        }
+        return;
+      }
 
       this.pinOriginIfUnset(event.origin);
       onMessage(event.data);
@@ -83,7 +103,20 @@ export class DefaultTransport implements Transport {
 
     this.customEventListener = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
-      if (!isValidPlatformMessage(detail)) return;
+      if (!isValidPlatformMessage(detail)) {
+        const d = detail as Record<string, unknown> | null;
+        if (
+          d &&
+          typeof d === "object" &&
+          (d as Record<string, unknown>).channel === MESSAGE_CHANNEL
+        ) {
+          const result = validatePlatformMessage(detail);
+          this.logger.debug("Dropped invalid SDK message on CustomEvent", {
+            reason: result.reason,
+          });
+        }
+        return;
+      }
       onMessage(detail);
     };
     window.addEventListener(PLATFORM_EVENT_NAME, this.customEventListener);

@@ -12,6 +12,7 @@ export type SdkErrorCode =
   | "HANDSHAKE_FAILED"
   | "HANDSHAKE_TIMEOUT"
   | "INVALID_MESSAGE"
+  | "INVALID_OPTIONS"
   | "SDK_NOT_INITIALIZED"
   | "SDK_ALREADY_DESTROYED"
   | "REQUEST_CANCELLED"
@@ -48,5 +49,19 @@ export class SdkError extends Error {
     this.details = options.details;
     this.cause = options.cause;
     Object.setPrototypeOf(this, new.target.prototype);
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      code: this.code,
+      message: this.message,
+      retryable: this.retryable,
+      details: this.details,
+      cause:
+        this.cause instanceof Error
+          ? { name: this.cause.name, message: this.cause.message }
+          : this.cause,
+    };
   }
 }

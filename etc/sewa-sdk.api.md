@@ -126,6 +126,9 @@ export interface ChatSdkModule {
     chat(messages: ChatMessage[], options?: ModelCompletionOptions, requestOptions?: ChatRequestOptions): Promise<StreamBuilder>;
 }
 
+// @public (undocumented)
+export function clearInstances(): void;
+
 export { ConfigSdkModule }
 
 // @public
@@ -195,6 +198,21 @@ export interface DeviceSdkModuleWithGuards extends DeviceSdkModule {
     isSupported(action: DeviceAction): boolean;
 }
 
+// @public (undocumented)
+export interface Diagnostic {
+    // (undocumented)
+    code: string;
+    // (undocumented)
+    details?: Record<string, unknown>;
+    // (undocumented)
+    message: string;
+    // (undocumented)
+    severity: DiagnosticSeverity;
+}
+
+// @public (undocumented)
+export type DiagnosticSeverity = "info" | "warn" | "error";
+
 export { Direction }
 
 // @public
@@ -211,8 +229,29 @@ export { EventHandler }
 
 export { FlagsSdkModule }
 
+// @public @deprecated
+export function getActiveInstance(): MiniAppSdk | null;
+
+// @public (undocumented)
+export function getAllInstances(): readonly MiniAppSdk[];
+
+// @public
+export function getErrorCode(error: unknown): string | undefined;
+
+// @public (undocumented)
+export function getInstance(miniAppId?: string): MiniAppSdk | undefined;
+
 // @public
 export function getMiniAppSdk(): MiniAppSdk;
+
+// @public
+export class HandshakeError extends SdkError {
+    constructor(params: {
+        message: string;
+        cause?: unknown;
+        timedOut?: boolean;
+    });
+}
 
 // @public (undocumented)
 type Headers_2 = Record<string, string>;
@@ -316,6 +355,24 @@ export interface HttpUploadOptions {
 // @public
 export function initMiniAppSdk(options: MiniAppSdkOptions): Promise<MiniAppSdk>;
 
+// @public (undocumented)
+export function isAuthError(error: unknown): boolean;
+
+// @public (undocumented)
+export function isHandshakeError(error: unknown): error is HandshakeError;
+
+// @public (undocumented)
+export function isRetryable(error: unknown): boolean;
+
+// @public
+export function isSdkError(error: unknown): error is SdkError;
+
+// @public (undocumented)
+export function isTimeout(error: unknown): error is TimeoutError;
+
+// @public (undocumented)
+export function isTransportError(error: unknown): error is TransportError;
+
 // @public
 export const LINKS_EVENTS: {
     readonly OPENED: "links.opened";
@@ -347,7 +404,7 @@ export const MESSAGE_CHANNEL = "gov-platform-sdk";
 // @public
 export type MessageType = "request" | "response" | "event" | "handshake" | "stream";
 
-// @public
+// @public (undocumented)
 export class MiniAppSdk implements MiniAppSdkInterface {
     constructor(options: MiniAppSdkOptions, dependencies?: MiniAppSdkDependencies);
     // (undocumented)
@@ -359,6 +416,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     // (undocumented)
     readonly auth: AuthSdkModule;
     get capabilities(): readonly string[];
+    get chat(): ChatSdkModule;
     // (undocumented)
     readonly config: ConfigSdkModule;
     // (undocumented)
@@ -373,7 +431,16 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     // (undocumented)
     emit(event: string, data?: unknown): void;
     // (undocumented)
+    events<K extends keyof SdkEventMap>(event: K, options?: OnEventOptions & {
+        signal?: AbortSignal;
+    }): AsyncIterable<SdkEventMap[K]>;
+    // (undocumented)
+    events(event: string, options?: OnEventOptions & {
+        signal?: AbortSignal;
+    }): AsyncIterable<unknown>;
+    // (undocumented)
     readonly flags: FlagsSdkModule;
+    static getInstance(miniAppId?: string): MiniAppSdk | undefined;
     getMetrics(): RpcMetricsSnapshot;
     getModule<T>(name: string): T | undefined;
     // (undocumented)
@@ -393,6 +460,14 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     // (undocumented)
     on(event: string, handler: EventHandler, options?: OnEventOptions): () => void;
     // (undocumented)
+    once<K extends keyof SdkEventMap>(event: K, options?: OnEventOptions & {
+        signal?: AbortSignal;
+    }): Promise<SdkEventMap[K]>;
+    // (undocumented)
+    once(event: string, options?: OnEventOptions & {
+        signal?: AbortSignal;
+    }): Promise<unknown>;
+    // (undocumented)
     readonly permissions: PermissionsSdkModule;
     // (undocumented)
     readonly platform: PlatformSdkModule;
@@ -402,10 +477,19 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     // (undocumented)
     request<T>(namespace: string, action: string, payload?: unknown, options?: RpcRequestOptions): Promise<T>;
     // (undocumented)
+    requestSafe<T>(namespace: string, action: string, payload?: unknown, options?: RpcRequestOptions): Promise<{
+        ok: true;
+        value: T;
+    } | {
+        ok: false;
+        error: Error;
+    }>;
+    // (undocumented)
     readonly storage: StorageSdkModule;
     // (undocumented)
     readonly traceId: string;
     use(middleware: RpcMiddleware): void;
+    usePlugin(plugin: SdkPlugin): Promise<void>;
     // (undocumented)
     readonly version = "1.0.0";
 }
@@ -431,6 +515,8 @@ export interface MiniAppSdkInterface {
     // (undocumented)
     auth: AuthSdkModule;
     readonly capabilities: readonly string[];
+    // @deprecated
+    readonly chat: ChatSdkModule;
     // (undocumented)
     config: ConfigSdkModule;
     readonly debug: SdkDebug;
@@ -441,6 +527,13 @@ export interface MiniAppSdkInterface {
     emit<K extends keyof SdkEventMap>(event: K, data: SdkEventMap[K]): void;
     // (undocumented)
     emit(event: string, data?: unknown): void;
+    events<K extends keyof SdkEventMap>(event: K, options?: OnEventOptions & {
+        signal?: AbortSignal;
+    }): AsyncIterable<SdkEventMap[K]>;
+    // (undocumented)
+    events(event: string, options?: OnEventOptions & {
+        signal?: AbortSignal;
+    }): AsyncIterable<unknown>;
     // (undocumented)
     flags: FlagsSdkModule;
     getMetrics(): RpcMetricsSnapshot;
@@ -459,6 +552,13 @@ export interface MiniAppSdkInterface {
     on<K extends keyof SdkEventMap>(event: K, handler: (payload: SdkEventMap[K]) => void, options?: OnEventOptions): () => void;
     // (undocumented)
     on(event: string, handler: EventHandler, options?: OnEventOptions): () => void;
+    once<K extends keyof SdkEventMap>(event: K, options?: OnEventOptions & {
+        signal?: AbortSignal;
+    }): Promise<SdkEventMap[K]>;
+    // (undocumented)
+    once(event: string, options?: OnEventOptions & {
+        signal?: AbortSignal;
+    }): Promise<unknown>;
     // (undocumented)
     permissions: PermissionsSdkModule;
     // (undocumented)
@@ -466,11 +566,28 @@ export interface MiniAppSdkInterface {
     // Warning: (ae-forgotten-export) The symbol "RpcClient" needs to be exported by the entry point index.d.ts
     registerModule<T>(name: string, factory: (rpc: RpcClient) => T): void;
     request<T>(namespace: string, action: string, payload?: unknown, options?: RpcRequestOptions): Promise<T>;
+    requestSafe<T>(namespace: string, action: string, payload?: unknown, options?: RpcRequestOptions): Promise<{
+        ok: true;
+        value: T;
+    } | {
+        ok: false;
+        error: Error;
+    }>;
     // (undocumented)
     storage: StorageSdkModule;
     // (undocumented)
     readonly traceId: string;
     use(middleware: RpcMiddleware): void;
+    usePlugin(plugin: {
+        name: string;
+        install(ctx: {
+            sdk: MiniAppSdkInterface;
+            rpc: RpcClient;
+            logger: Logger;
+        }): void | Promise<void>;
+        onInitialize?(): Promise<void>;
+        onDestroy?(): void;
+    }): Promise<void>;
     // (undocumented)
     readonly version: string;
 }
@@ -558,6 +675,7 @@ export { NotificationsSdkModule }
 // @public
 export interface OnEventOptions {
     replay?: boolean;
+    signal?: AbortSignal;
 }
 
 // @public
@@ -640,8 +758,22 @@ export { PlatformUser }
 // @public
 export const PROTOCOL_VERSION = "1.0.0";
 
+// @public
+export class ProtocolError extends SdkError {
+    constructor(params: {
+        reason: "malformed-message" | "host-rejected";
+        platformError?: PlatformError;
+        message?: string;
+    });
+    // (undocumented)
+    readonly reason: "malformed-message" | "host-rejected";
+}
+
 // @public (undocumented)
 export type Query = Record<string, string>;
+
+// @public (undocumented)
+export function registerInstance(instance: MiniAppSdk): void;
 
 // @public
 export class RequestCancelledError extends SdkError {
@@ -717,6 +849,7 @@ export interface RpcStreamOptions {
 
 // @public
 export interface SdkDebug {
+    diagnose(): Diagnostic[];
     snapshot(): SdkDebugSnapshot;
 }
 
@@ -750,10 +883,12 @@ export class SdkError extends Error {
     readonly details: Record<string, unknown> | undefined;
     // (undocumented)
     readonly retryable: boolean;
+    // (undocumented)
+    toJSON(): Record<string, unknown>;
 }
 
 // @public
-export type SdkErrorCode = "TIMEOUT" | "TRANSPORT_NOT_STARTED" | "TRANSPORT_SEND_FAILED" | "HANDSHAKE_FAILED" | "HANDSHAKE_TIMEOUT" | "INVALID_MESSAGE" | "SDK_NOT_INITIALIZED" | "SDK_ALREADY_DESTROYED" | "REQUEST_CANCELLED" | "STREAM_CANCELLED" | "HTTP_CLIENT_ERROR" | "HTTP_SERVER_ERROR" | "HOST_ERROR";
+export type SdkErrorCode = "TIMEOUT" | "TRANSPORT_NOT_STARTED" | "TRANSPORT_SEND_FAILED" | "HANDSHAKE_FAILED" | "HANDSHAKE_TIMEOUT" | "INVALID_MESSAGE" | "INVALID_OPTIONS" | "SDK_NOT_INITIALIZED" | "SDK_ALREADY_DESTROYED" | "REQUEST_CANCELLED" | "STREAM_CANCELLED" | "HTTP_CLIENT_ERROR" | "HTTP_SERVER_ERROR" | "HOST_ERROR";
 
 // @public (undocumented)
 export interface SdkErrorOptions {
@@ -789,6 +924,22 @@ export interface SdkEventMap {
     };
     "notifications.opened": NotificationOpenEvent;
     "notifications.token": string;
+}
+
+// @public
+export interface SdkPlugin {
+    // (undocumented)
+    install(ctx: {
+        sdk: MiniAppSdk;
+        rpc: RpcClient;
+        logger: Logger;
+    }): void | Promise<void>;
+    // (undocumented)
+    name: string;
+    // (undocumented)
+    onDestroy?(): void;
+    // (undocumented)
+    onInitialize?(): Promise<void>;
 }
 
 // @public
@@ -838,6 +989,15 @@ export { ThemePreference }
 export { ThemeState }
 
 // @public
+export class TimeoutError extends SdkError {
+    constructor(params: {
+        namespace: string;
+        action: string;
+        timeoutMs: number;
+    });
+}
+
+// @public
 export interface Tracer {
     startSpan(name: string, context?: Record<string, unknown>): Span;
 }
@@ -855,6 +1015,19 @@ export interface TransportDebugInfo {
     pinnedOrigin?: string | null;
     started: boolean;
 }
+
+// @public
+export class TransportError extends SdkError {
+    constructor(options: Omit<SdkErrorOptions, "code"> & {
+        code?: SdkErrorOptions["code"];
+    });
+}
+
+// @public (undocumented)
+export function unregisterInstance(instance: MiniAppSdk): void;
+
+// @public (undocumented)
+export function validateSdkOptions(options: MiniAppSdkOptions): void;
 
 // (No @packageDocumentation comment for this package)
 

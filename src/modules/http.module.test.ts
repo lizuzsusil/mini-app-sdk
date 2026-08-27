@@ -122,7 +122,10 @@ describe("http module upload progress", () => {
     const module = createHttpModule(rpc);
     const onProgress = vi.fn();
 
-    await module.post({ endpoint: "/upload", body: "payload" }, { onProgress });
+    await (module.post as unknown as (p: unknown, o: unknown) => Promise<unknown>)(
+      { endpoint: "/upload", body: "payload" },
+      { onProgress },
+    );
 
     expect(onEvent).toHaveBeenCalledWith(
       HTTP_EVENTS.UPLOAD_PROGRESS,

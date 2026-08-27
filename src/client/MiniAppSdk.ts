@@ -3,7 +3,6 @@ import {
   HOST_DESCRIPTOR_GLOBAL_KEY,
   NAMESPACES,
   PROTOCOL_VERSION,
-  SDK_GLOBAL_KEY,
 } from "../constants";
 import { SdkError } from "../errors";
 import type { Logger } from "../logging";
@@ -43,6 +42,7 @@ import type {
   ChatSdkModule,
   ConfigSdkModule,
   DeviceSdkModuleWithGuards,
+  Diagnostic,
   EventHandler,
   FlagsSdkModule,
   HostDescriptor,
@@ -64,7 +64,13 @@ import type {
   PlatformTypeResponse,
   SdkEventMap,
 } from "../types/common.types";
+import { validateSdkOptions } from "../types/validate-options";
 import { delay } from "../utils";
+import {
+  getInstance as getRegistryInstance,
+  registerInstance,
+  unregisterInstance,
+} from "./instance-registry";
 
 /**
  * Extra, internal-only construction knobs. Deliberately **not** part of
@@ -103,6 +109,17 @@ const APPEARANCE_HYDRATION_BUDGET_MS = 1200;
  * string or a `.request()` call directly in this file, it almost certainly
  * belongs in a module file instead.
  */
+export interface SdkPlugin {
+  name: string;
+  install(ctx: {
+    sdk: MiniAppSdk;
+    rpc: RpcClient;
+    logger: Logger;
+  }): void | Promise<void>;
+  onInitialize?(): Promise<void>;
+  onDestroy?(): void;
+}
+
 export class MiniAppSdk implements MiniAppSdkInterface {
   readonly miniAppId: string;
   readonly version = PROTOCOL_VERSION;
@@ -121,6 +138,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly device: DeviceSdkModuleWithGuards;
   readonly http: HttpSdkModule;
   readonly ai: ChatSdkModule;
+  /** Alias for `ai` — preferred name for the chat/AI module. */
+  get chat(): ChatSdkModule {
+    return this.ai;
+  }
   readonly appearance: AppearanceSdkModule;
   readonly notifications: NotificationsSdkModule;
   readonly links: LinksSdkModule;
@@ -138,11 +159,13 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private initialized = false;
   private destroyed = false;
   private initializePromise: Promise<void> | null = null;
+  private readonly plugins: SdkPlugin[] = [];
 
   constructor(
     options: MiniAppSdkOptions,
     dependencies: MiniAppSdkDependencies = {},
   ) {
+    validateSdkOptions(options);
     this.miniAppId = options.miniAppId;
     const devMode = MiniAppSdk.resolveDevMode(options);
     this.logger =
@@ -243,11 +266,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
         pendingRequests: this.rpc.getPendingRequests(),
         registeredModules: this.registry.list(),
       }),
+      diagnose: (): Diagnostic[] => this.diagnose(),
     };
 
-    if (typeof globalThis !== "undefined") {
-      (globalThis as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY] = this;
-    }
+    registerInstance(this);
   }
 
   /**
@@ -349,6 +371,15 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     }
 
     this.initialized = true;
+    for (const plugin of this.plugins) {
+      try {
+        await plugin.onInitialize?.();
+      } catch (error) {
+        this.logger.warn(`Plugin "${plugin.name}" onInitialize threw`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     this.logger.info(`MiniAppSdk("${this.miniAppId}") initialized`, {
       platformType,
     });
@@ -380,6 +411,107 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     await Promise.race([hydration, delay(APPEARANCE_HYDRATION_BUDGET_MS)]);
   }
 
+  private diagnose(): Diagnostic[] {
+    const diags: Diagnostic[] = [];
+    const snap = this.debug.snapshot();
+    // Defer circular call — build snapshot manually to avoid recursion
+    // diagnose() is called from debug.snapshot's closure above, so we need
+    // to avoid re-entering debug.snapshot(). Use raw fields instead.
+    try {
+      if (!this.initialized && !this.destroyed) {
+        diags.push({
+          code: "NOT_INITIALIZED",
+          severity: "info",
+          message:
+            "SDK not yet initialized — capabilities empty until initialize() resolves",
+          details: { miniAppId: this.miniAppId },
+        });
+      }
+      if (this.destroyed) {
+        diags.push({
+          code: "DESTROYED",
+          severity: "warn",
+          message:
+            "SDK instance has been destroyed and cannot be re-initialized",
+          details: { miniAppId: this.miniAppId },
+        });
+      }
+      if (this.initialized && this.capabilities.length === 0) {
+        diags.push({
+          code: "NO_CAPABILITIES",
+          severity: "warn",
+          message:
+            "No capabilities negotiated — host may not have answered handshake or capabilities list empty",
+          details: { traceId: this.traceId },
+        });
+      }
+      const pending = this.rpc.getPendingRequests();
+      if (pending.length > 5) {
+        diags.push({
+          code: "PENDING_BACKLOG",
+          severity: "warn",
+          message: `High pending request backlog: ${pending.length} requests awaiting host reply`,
+          details: { pendingRequests: pending },
+        });
+      }
+      const transportInfo = this.rpc.getTransportDebugInfo();
+      if (!transportInfo.started && this.initialized) {
+        diags.push({
+          code: "TRANSPORT_NOT_STARTED",
+          severity: "error",
+          message:
+            "Transport not started while SDK is initialized — messages will not be delivered",
+          details: { transport: transportInfo },
+        });
+      }
+      const snapMetrics = snap.metrics;
+      if (snapMetrics.totalRequests > 0) {
+        const failureRate =
+          snapMetrics.totalFailures / snapMetrics.totalRequests;
+        if (failureRate > 0.5 && snapMetrics.totalRequests > 10) {
+          diags.push({
+            code: "HIGH_FAILURE_RATE",
+            severity: "warn",
+            message: `High request failure rate: ${(failureRate * 100).toFixed(1)}% of ${snapMetrics.totalRequests} requests failed`,
+            details: {
+              failures: snapMetrics.totalFailures,
+              total: snapMetrics.totalRequests,
+            },
+          });
+        }
+      }
+      const appearanceState = this.appearance.state();
+      if (!appearanceState.locale || !appearanceState.theme) {
+        diags.push({
+          code: "APPEARANCE_INCOMPLETE",
+          severity: "info",
+          message:
+            "Appearance state incomplete — host may not have sent hint and appearance namespace not negotiated",
+          details: {
+            locale: appearanceState.locale,
+            theme: appearanceState.theme,
+            capabilities: this.capabilities,
+          },
+        });
+      }
+      if (this.plugins.length > 0) {
+        diags.push({
+          code: "PLUGINS_ACTIVE",
+          severity: "info",
+          message: `${this.plugins.length} plugin(s) active`,
+          details: { plugins: this.plugins.map((p) => p.name) },
+        });
+      }
+    } catch (error) {
+      diags.push({
+        code: "DIAGNOSE_ERROR",
+        severity: "error",
+        message: `diagnose() internal error: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+    return diags;
+  }
+
   /**
    * Tears down the transport and clears all pending state. Safe to call
    * more than once. After `destroy()`, this instance cannot be
@@ -387,18 +519,21 @@ export class MiniAppSdk implements MiniAppSdkInterface {
    */
   destroy(): void {
     if (this.destroyed) return;
+    for (const plugin of [...this.plugins].reverse()) {
+      try {
+        plugin.onDestroy?.();
+      } catch (error) {
+        this.logger.warn(`Plugin "${plugin.name}" onDestroy threw`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     this.rpc.stop();
     for (const unsub of this.appearanceUnsubscribers) unsub();
     this.appearanceUnsubscribers.length = 0;
     this.initialized = false;
     this.destroyed = true;
-    if (
-      typeof globalThis !== "undefined" &&
-      (globalThis as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY] ===
-        this
-    ) {
-      delete (globalThis as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY];
-    }
+    unregisterInstance(this);
     this.logger.info(`MiniAppSdk("${this.miniAppId}") destroyed`);
   }
 
@@ -409,6 +544,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
    * surface consumers already depend on. Known events (see `SdkEventMap`)
    * get typed payloads; host-defined events outside the map remain usable
    * through the `string` overload.
+   * When `options.signal` is provided, aborting the signal auto-unsubscribes.
    */
   on<K extends keyof SdkEventMap>(
     event: K,
@@ -428,6 +564,122 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     return this.rpc.onEvent(event, handler, options);
   }
 
+  once<K extends keyof SdkEventMap>(
+    event: K,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): Promise<SdkEventMap[K]>;
+  once(
+    event: string,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): Promise<unknown>;
+  once(
+    event: string,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): Promise<unknown> {
+    return new Promise<unknown>((resolve, reject) => {
+      if (options?.signal?.aborted) {
+        reject(
+          new SdkError({
+            code: "REQUEST_CANCELLED",
+            message: `once("${event}") cancelled via AbortSignal`,
+            cause: options.signal.reason,
+          }),
+        );
+        return;
+      }
+      const unsubscribe = this.on(event, (payload) => {
+        unsubscribe();
+        options?.signal?.removeEventListener("abort", onAbort);
+        resolve(payload);
+      });
+      const onAbort = (): void => {
+        unsubscribe();
+        reject(
+          new SdkError({
+            code: "REQUEST_CANCELLED",
+            message: `once("${event}") cancelled via AbortSignal`,
+            cause: options?.signal?.reason,
+          }),
+        );
+      };
+      options?.signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  events<K extends keyof SdkEventMap>(
+    event: K,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): AsyncIterable<SdkEventMap[K]>;
+  events(
+    event: string,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): AsyncIterable<unknown>;
+  events(
+    event: string,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): AsyncIterable<unknown> {
+    const sdk = this;
+    return {
+      [Symbol.asyncIterator](): AsyncIterator<unknown> {
+        const queue: unknown[] = [];
+        let pendingResolve: ((v: IteratorResult<unknown>) => void) | null =
+          null;
+        let done = false;
+        const unsubscribe = sdk.on(
+          event,
+          (payload) => {
+            if (pendingResolve) {
+              const r = pendingResolve;
+              pendingResolve = null;
+              r({ value: payload, done: false });
+            } else {
+              queue.push(payload);
+            }
+          },
+          { replay: options?.replay },
+        );
+
+        const onAbort = (): void => {
+          done = true;
+          if (pendingResolve) {
+            const r = pendingResolve;
+            pendingResolve = null;
+            r({ value: undefined, done: true });
+          }
+          unsubscribe();
+        };
+        if (options?.signal) {
+          if (options.signal.aborted) onAbort();
+          else
+            options.signal.addEventListener("abort", onAbort, { once: true });
+        }
+
+        return {
+          next(): Promise<IteratorResult<unknown>> {
+            if (done) return Promise.resolve({ value: undefined, done: true });
+            if (queue.length > 0) {
+              return Promise.resolve({ value: queue.shift(), done: false });
+            }
+            return new Promise<IteratorResult<unknown>>((resolve) => {
+              pendingResolve = resolve;
+            });
+          },
+          return(): Promise<IteratorResult<unknown>> {
+            done = true;
+            options?.signal?.removeEventListener("abort", onAbort);
+            unsubscribe();
+            if (pendingResolve) {
+              const r = pendingResolve;
+              pendingResolve = null;
+              r({ value: undefined, done: true });
+            }
+            return Promise.resolve({ value: undefined, done: true });
+          },
+        };
+      },
+    };
+  }
+
   /** {@inheritdoc} */
   request<T>(
     namespace: string,
@@ -436,6 +688,23 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     options?: RpcRequestOptions,
   ): Promise<T> {
     return this.rpc.request<T>(namespace, action, payload, options);
+  }
+
+  async requestSafe<T>(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+    options?: RpcRequestOptions,
+  ): Promise<{ ok: true; value: T } | { ok: false; error: Error }> {
+    try {
+      const value = await this.request<T>(namespace, action, payload, options);
+      return { ok: true, value };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
   }
 
   /** {@inheritdoc} */
@@ -459,6 +728,30 @@ export class MiniAppSdk implements MiniAppSdkInterface {
    */
   use(middleware: RpcMiddleware): void {
     this.rpc.use(middleware);
+  }
+
+  /**
+   * Installs a plugin. Plugins can register middleware, event listeners,
+   * and modules via the provided context. Lifecycle hooks `onInitialize`
+   * are invoked on next `initialize()`, and `onDestroy` in reverse order
+   * on `destroy()`. Additive — existing `use()` / `registerModule()` remain.
+   */
+  async usePlugin(plugin: SdkPlugin): Promise<void> {
+    if (this.plugins.some((p) => p.name === plugin.name)) {
+      this.logger.warn(`Plugin "${plugin.name}" already installed — skipping`);
+      return;
+    }
+    await plugin.install({ sdk: this, rpc: this.rpc, logger: this.logger });
+    this.plugins.push(plugin);
+    if (this.initialized) {
+      try {
+        await plugin.onInitialize?.();
+      } catch (error) {
+        this.logger.warn(`Plugin "${plugin.name}" onInitialize threw`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
 
   /**
@@ -492,5 +785,14 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   /** Retrieves a module registered via `registerModule()` (or any built-in module, by its namespace name). */
   getModule<T>(name: string): T | undefined {
     return this.registry.get<T>(name);
+  }
+
+  /**
+   * Returns a previously registered instance by `miniAppId`, or the most
+   * recently created one when no id is given. Prefer this over directly
+   * reading `window.__GSA_SDK__`.
+   */
+  static getInstance(miniAppId?: string): MiniAppSdk | undefined {
+    return getRegistryInstance(miniAppId);
   }
 }

@@ -55,6 +55,15 @@ export interface SdkDebugSnapshot {
   registeredModules: string[];
 }
 
+export type DiagnosticSeverity = "info" | "warn" | "error";
+
+export interface Diagnostic {
+  code: string;
+  severity: DiagnosticSeverity;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
 /** The `sdk.debug` surface: runtime introspection for support and tooling. */
 export interface SdkDebug {
   /**
@@ -63,6 +72,12 @@ export interface SdkDebug {
    * and registered modules. Paste-able into a support ticket or dev tools.
    */
   snapshot(): SdkDebugSnapshot;
+  /**
+   * Heuristic checks over the current snapshot — e.g. missing appearance
+   * hint, no capabilities after initialize, stale transport origin. Useful
+   * for `npx sewa-sdk diagnose` or support tickets. Never throws.
+   */
+  diagnose(): Diagnostic[];
 }
 
 /**
@@ -96,6 +111,12 @@ export interface MiniAppSdkInterface {
   api: ApiSdkModule;
   http: HttpSdkModule;
   ai: ChatSdkModule;
+  /**
+   * Alias for `ai`. Prefer `chat` for new code; `ai` remains for
+   * backward compatibility and will be removed in a future major.
+   * @deprecated Use `chat` instead.
+   */
+  readonly chat: ChatSdkModule;
   /** Push notifications: permission/token registration plus tap events. */
   notifications: NotificationsSdkModule;
   /** Deep links: open external URLs and subscribe to inbound link resolution. */
@@ -151,6 +172,56 @@ export interface MiniAppSdkInterface {
   registerModule<T>(name: string, factory: (rpc: RpcClient) => T): void;
   /** Retrieves a module registered via `registerModule()`, or any built-in module by its namespace name. */
   getModule<T>(name: string): T | undefined;
+
+  /**
+   * Resolves after the next emission of `event`, then auto-unsubscribes.
+   * Rejects if `signal` aborts before the event fires.
+   */
+  once<K extends keyof SdkEventMap>(
+    event: K,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): Promise<SdkEventMap[K]>;
+  once(
+    event: string,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): Promise<unknown>;
+
+  /**
+   * Async-iterable over successive emissions of `event`. The iterator
+   * completes when `signal` aborts or the consumer breaks.
+   */
+  events<K extends keyof SdkEventMap>(
+    event: K,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): AsyncIterable<SdkEventMap[K]>;
+  events(
+    event: string,
+    options?: OnEventOptions & { signal?: AbortSignal },
+  ): AsyncIterable<unknown>;
+
+  /**
+   * Result-type variant of `request` — never throws, returns a
+   * `{ok, value}` / `{ok:false, error}` envelope. Useful for
+   * railway-oriented code that prefers values over exceptions.
+   */
+  requestSafe<T>(
+    namespace: string,
+    action: string,
+    payload?: unknown,
+    options?: RpcRequestOptions,
+  ): Promise<{ ok: true; value: T } | { ok: false; error: Error }>;
+
+  /** Installs a plugin (see `SdkPlugin`). Additive — existing `use()` remains. */
+  usePlugin(plugin: {
+    name: string;
+    install(ctx: {
+      sdk: MiniAppSdkInterface;
+      rpc: RpcClient;
+      logger: import("../logging").Logger;
+    }): void | Promise<void>;
+    onInitialize?(): Promise<void>;
+    onDestroy?(): void;
+  }): Promise<void>;
 }
 
 /**

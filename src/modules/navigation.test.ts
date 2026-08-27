@@ -21,7 +21,7 @@ describe("navigation router", () => {
 
     expect(request).toHaveBeenCalledWith(
       NAMESPACES.NAVIGATION,
-      ACTIONS.NAVIGATION.BACK,
+      ACTIONS.NAVIGATION.ROUTER,
       { consumed: true },
     );
   });
@@ -33,7 +33,7 @@ describe("navigation router", () => {
 
     expect(request).toHaveBeenCalledWith(
       NAMESPACES.NAVIGATION,
-      ACTIONS.NAVIGATION.PUSH,
+      ACTIONS.NAVIGATION.ROUTER,
       { consumed: false },
     );
   });
@@ -47,13 +47,13 @@ describe("navigation router", () => {
     expect(request).toHaveBeenNthCalledWith(
       1,
       NAMESPACES.NAVIGATION,
-      ACTIONS.NAVIGATION.BACK,
+      ACTIONS.NAVIGATION.ROUTER,
       { consumed: true },
     );
     expect(request).toHaveBeenNthCalledWith(
       2,
       NAMESPACES.NAVIGATION,
-      ACTIONS.NAVIGATION.PUSH,
+      ACTIONS.NAVIGATION.ROUTER,
       { consumed: true },
     );
   });
@@ -98,7 +98,7 @@ describe("navigation router", () => {
     });
     expect(deep.request).toHaveBeenLastCalledWith(
       NAMESPACES.NAVIGATION,
-      ACTIONS.NAVIGATION.BACK,
+      ACTIONS.NAVIGATION.ROUTER,
       { consumed: true },
     );
 
@@ -114,7 +114,7 @@ describe("navigation router", () => {
     });
     expect(atRoot.request).toHaveBeenLastCalledWith(
       NAMESPACES.NAVIGATION,
-      ACTIONS.NAVIGATION.BACK,
+      ACTIONS.NAVIGATION.ROUTER,
       { consumed: false },
     );
   });

@@ -52,6 +52,12 @@ export interface OnEventOptions {
    * miss events pushed before they subscribed. Defaults to false.
    */
   replay?: boolean;
+  /**
+   * When provided, aborting the signal automatically unsubscribes the
+   * handler — useful for tying a subscription to a component mount
+   * (`useEffect` + `AbortController`) without manual cleanup.
+   */
+  signal?: AbortSignal;
 }
 
 /** The host shell the SDK is running inside: Flutter (mobile WebView) or web (Next.js). */

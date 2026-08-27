@@ -539,7 +539,8 @@ describe("MiniAppSdk", () => {
     await sdk.initialize();
 
     expect(sdk.notifications.isSupported()).toBe(false);
-    expect(sdk.links.isSupported()).toBe(false);
+    // links.isSupported is a boolean property in @lizuz/mini-app-types (not a function)
+    expect((sdk.links as unknown as { isSupported: boolean | (() => boolean) }).isSupported).toBe(false);
     expect(sdk.capabilities).toEqual(["auth", "http"]);
   });
 });

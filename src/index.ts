@@ -2,8 +2,15 @@ import { MiniAppSdk } from "./client";
 import { SdkError } from "./errors";
 import type { MiniAppSdkOptions } from "./types";
 
-export type { MiniAppSdkDependencies } from "./client";
+export type { MiniAppSdkDependencies, SdkPlugin } from "./client";
 export { MiniAppSdk } from "./client";
+export {
+  clearInstances,
+  getAllInstances,
+  getInstance,
+  registerInstance,
+  unregisterInstance,
+} from "./client/instance-registry";
 export {
   CONNECTION_EVENTS,
   HTTP_EVENTS,
@@ -20,11 +27,22 @@ export type {
   SdkErrorOptions,
 } from "./errors";
 export {
+  getErrorCode,
+  HandshakeError,
   HttpClientError,
   HttpServerError,
+  isAuthError,
+  isHandshakeError,
+  isRetryable,
+  isSdkError,
+  isTimeout,
+  isTransportError,
+  ProtocolError,
   RequestCancelledError,
   SdkError,
   StreamCancelledError,
+  TimeoutError,
+  TransportError,
 } from "./errors";
 export type { ConsoleLoggerOptions, Logger } from "./logging";
 export { ConsoleLogger, NoopLogger } from "./logging";
@@ -82,6 +100,8 @@ export type {
   DevicePermissionStatus,
   DeviceSdkModule,
   DeviceSdkModuleWithGuards,
+  Diagnostic,
+  DiagnosticSeverity,
   Direction,
   EventHandler,
   FlagsSdkModule,
@@ -139,33 +159,45 @@ export type {
   ThemePreference,
   ThemeState,
 } from "./types";
+export { validateSdkOptions } from "./types/validate-options";
+
+import {
+  getInstance as getRegistryInstance,
+  registerInstance as registerRegistryInstance,
+} from "./client/instance-registry";
 
 /**
  * Module-scoped "active instance" used only by the `createMiniAppSdk` /
  * `getMiniAppSdk` / `initMiniAppSdk` convenience trio below, for
  * consumers who want a single implicit SDK instance instead of managing
- * their own reference. This is a small, explicit, single-purpose piece of
- * state — not a hidden global — and is entirely separate from the
- * `cdn.ts` multi-instance registry, which exists for a different
- * consumer (the `<script>`-tag/IIFE build) and is intentionally not
- * mixed with this one.
+ * their own reference. Delegates to the shared `instance-registry` so the
+ * CDN IIFE (`src/cdn.ts`) and this helper share the same backing store
+ * (see A2 in `future.md`).
  */
 let activeInstance: MiniAppSdk | null = null;
 
 /** Constructs a `MiniAppSdk` without initializing it. Call `.initialize()` yourself. */
 export function createMiniAppSdk(options: MiniAppSdkOptions): MiniAppSdk {
-  return new MiniAppSdk(options);
+  const sdk = new MiniAppSdk(options);
+  // Register eagerly so `MiniAppSdk.getInstance()` and `window.__GSA_SDK__`
+  // reflect the instance even before `initialize()` (mirrors CDN behavior).
+  registerRegistryInstance(sdk);
+  activeInstance = sdk;
+  return sdk;
 }
 
 /** Returns the instance created by the most recent `initMiniAppSdk()` call. */
 export function getMiniAppSdk(): MiniAppSdk {
-  if (!activeInstance) {
-    throw new SdkError({
-      code: "SDK_NOT_INITIALIZED",
-      message: "Mini App SDK not initialized. Call initMiniAppSdk() first.",
-    });
+  if (activeInstance) return activeInstance;
+  const fromRegistry = getRegistryInstance();
+  if (fromRegistry) {
+    activeInstance = fromRegistry;
+    return fromRegistry;
   }
-  return activeInstance;
+  throw new SdkError({
+    code: "SDK_NOT_INITIALIZED",
+    message: "Mini App SDK not initialized. Call initMiniAppSdk() first.",
+  });
 }
 
 /** Constructs, initializes, and registers a `MiniAppSdk` as the active instance. */
@@ -174,6 +206,16 @@ export async function initMiniAppSdk(
 ): Promise<MiniAppSdk> {
   const sdk = new MiniAppSdk(options);
   await sdk.initialize();
+  registerRegistryInstance(sdk);
   activeInstance = sdk;
   return sdk;
+}
+
+/**
+ * Prefer `MiniAppSdk.getInstance()` for new code. Kept for backward
+ * compatibility with existing consumers reading the module-scoped helper.
+ * @deprecated Use `MiniAppSdk.getInstance()` or `getInstance()` from `instance-registry`.
+ */
+export function getActiveInstance(): MiniAppSdk | null {
+  return activeInstance ?? getRegistryInstance() ?? null;
 }

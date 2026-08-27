@@ -689,6 +689,9 @@ export class RpcClient {
     handler: EventHandler<TPayload>,
     options?: OnEventOptions,
   ): () => void {
+    if (options?.signal?.aborted) {
+      return () => {};
+    }
     const isFirstHandlerForEvent = !this.eventHandlers.has(event);
     if (isFirstHandlerForEvent) {
       this.eventHandlers.set(event, new Set());
@@ -701,7 +704,15 @@ export class RpcClient {
       });
     }
 
-    this.eventHandlers.get(event)?.add(handler as EventHandler);
+    const handlers = this.eventHandlers.get(event);
+    handlers?.add(handler as EventHandler);
+
+    // Bounded handler guard — warn in devMode when a single event accumulates many handlers.
+    if (this.devMode && handlers && handlers.size > 20) {
+      this.logger.warn(
+        `[dev] "${event}" now has ${handlers.size} handlers — possible leak (subscribe without unsubscribe)`,
+      );
+    }
 
     if (options?.replay) {
       for (const payload of this.eventReplayBuffer.get(event) ?? []) {
@@ -715,9 +726,16 @@ export class RpcClient {
       }
     }
 
-    return () => {
+    const unsubscribe = (): void => {
       this.eventHandlers.get(event)?.delete(handler as EventHandler);
+      options?.signal?.removeEventListener("abort", unsubscribe);
     };
+
+    if (options?.signal) {
+      options.signal.addEventListener("abort", unsubscribe, { once: true });
+    }
+
+    return unsubscribe;
   }
 
   /**

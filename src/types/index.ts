@@ -92,6 +92,8 @@ export type {
   Query,
 } from "./http.types";
 export type {
+  Diagnostic,
+  DiagnosticSeverity,
   HeartbeatOptions,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
@@ -100,3 +102,4 @@ export type {
   SdkDebugSnapshot,
   SdkStatus,
 } from "./sdk.types";
+export { validateSdkOptions } from "./validate-options";
