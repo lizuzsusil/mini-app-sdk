@@ -1,82 +1,46 @@
 import type { StreamBuilder } from "../stream";
 
-export type Headers = Record<string, string>;
-export type Query = Record<string, string>;
-
-export interface HttpRequestBase {
-  endpoint?: string;
-  headers?: Headers;
-}
-
-export interface HttpQueryRequest extends HttpRequestBase {
-  query?: Query;
-}
-
-export interface HttpBodyRequest<TBody = unknown> extends HttpRequestBase {
-  body?: TBody;
-}
-
-export type HttpGetParams = HttpQueryRequest;
-export type HttpDeleteParams = HttpRequestBase;
-export type HttpPostParams<T = unknown> = HttpBodyRequest<T>;
-export type HttpPutParams<T = unknown> = HttpBodyRequest<T>;
-export type HttpPatchParams<T = unknown> = HttpBodyRequest<T>;
-
-export interface HttpResult<T = unknown> {
-  status: number;
-  data: T;
-  headers: Headers;
-}
-
-/** Progress reported during an upload, delivered via `HttpUploadOptions.onProgress`. */
-export interface HttpProgress {
-  uploadedBytes: number;
-  /** The host-reported total size when it knows it up front. */
-  totalBytes?: number;
-}
-
-/** Extra knobs for upload-carrying verbs (`post`/`put`/`patch`). */
-export interface HttpUploadOptions {
-  /**
-   * Invoked as the host reports upload progress. The SDK mirrors the host's
-   * `http.uploadProgress` event onto this callback; the host decides how
-   * granular the updates are. No callback = no progress subscription.
-   */
-  onProgress?: (progress: HttpProgress) => void;
-}
+export type {
+  Headers,
+  HttpBodyRequest,
+  HttpDeleteParams,
+  HttpGetParams,
+  HttpPatchParams,
+  HttpPostParams,
+  HttpProgress,
+  HttpPutParams,
+  HttpQueryRequest,
+  HttpRequestBase,
+  HttpResult,
+  HttpUploadOptions,
+  Query,
+} from "@lizuz/mini-app-types";
 
 export interface HttpSdkModule {
-  get<T>(params: HttpGetParams): Promise<HttpResult<T>>;
+  get<T>(
+    params: import("@lizuz/mini-app-types").HttpGetParams,
+  ): Promise<import("@lizuz/mini-app-types").HttpResult<T>>;
   post<T, B = unknown>(
-    params: HttpPostParams<B>,
-    options?: HttpUploadOptions,
-  ): Promise<HttpResult<T>>;
+    params: import("@lizuz/mini-app-types").HttpPostParams<B>,
+    options?: import("@lizuz/mini-app-types").HttpUploadOptions,
+  ): Promise<import("@lizuz/mini-app-types").HttpResult<T>>;
   put<T, B = unknown>(
-    params: HttpPutParams<B>,
-    options?: HttpUploadOptions,
-  ): Promise<HttpResult<T>>;
+    params: import("@lizuz/mini-app-types").HttpPutParams<B>,
+    options?: import("@lizuz/mini-app-types").HttpUploadOptions,
+  ): Promise<import("@lizuz/mini-app-types").HttpResult<T>>;
   patch<T, B = unknown>(
-    params: HttpPatchParams<B>,
-    options?: HttpUploadOptions,
-  ): Promise<HttpResult<T>>;
-  delete<T>(params: HttpDeleteParams): Promise<HttpResult<T>>;
-  /**
-   * A streamed request for AI chat: routed through `http.stream` instead of
-   * `ai.chat`. Returns a `StreamBuilder` that chunks the response and supports
-   * cancellation via `builder.cancel()` or an `AbortSignal` in options.
-   */
+    params: import("@lizuz/mini-app-types").HttpPatchParams<B>,
+    options?: import("@lizuz/mini-app-types").HttpUploadOptions,
+  ): Promise<import("@lizuz/mini-app-types").HttpResult<T>>;
+  delete<T>(
+    params: import("@lizuz/mini-app-types").HttpDeleteParams,
+  ): Promise<import("@lizuz/mini-app-types").HttpResult<T>>;
   stream(params: {
-    messages: import("../types").ChatMessage[];
+    messages: import("@lizuz/mini-app-types").ChatMessage[];
     options?: import("@lizuz/mini-app-types").ModelCompletionOptions;
-    requestOptions?: import("../types").ChatRequestOptions;
+    requestOptions?: import("./chat.types").ChatRequestOptions;
   }): Promise<StreamBuilder & AsyncIterable<string | Uint8Array>>;
-  /**
-   * A streamed GET for large downloads or SSE: routed through the same
-   * stream machinery as `ai.chat`, so the response arrives chunk-by-chunk
-   * and the returned `StreamBuilder` reports progress and supports
-   * cancellation.
-   */
   getStream(
-    params: HttpGetParams,
+    params: import("@lizuz/mini-app-types").HttpGetParams,
   ): Promise<StreamBuilder & AsyncIterable<string | Uint8Array>>;
 }

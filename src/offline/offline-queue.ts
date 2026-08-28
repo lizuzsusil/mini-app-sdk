@@ -1,13 +1,9 @@
+import type { OfflineQueueOptions } from "@lizuz/mini-app-types";
 import type { SdkPlugin } from "../client/MiniAppSdk";
 import { CONNECTION_EVENTS } from "../constants";
 import type { Logger } from "../logging";
 
-export interface OfflineQueueOptions {
-  /** Allowlisted namespaces that may be queued when offline. Default: ['storage','api','navigation'] */
-  allowlist?: string[];
-  maxEntries?: number;
-  ttlMs?: number;
-}
+export type { OfflineQueueOptions };
 
 interface QueuedRequest {
   namespace: string;

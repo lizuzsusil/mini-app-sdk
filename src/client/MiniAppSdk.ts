@@ -57,6 +57,7 @@ import type {
   PlatformTypeLiteral,
   SdkDebug,
   SdkDebugSnapshot,
+  SdkPlugin,
   StorageSdkModule,
 } from "../types";
 import type {
@@ -109,16 +110,7 @@ const APPEARANCE_HYDRATION_BUDGET_MS = 1200;
  * string or a `.request()` call directly in this file, it almost certainly
  * belongs in a module file instead.
  */
-export interface SdkPlugin {
-  name: string;
-  install(ctx: {
-    sdk: MiniAppSdk;
-    rpc: RpcClient;
-    logger: Logger;
-  }): void | Promise<void>;
-  onInitialize?(): Promise<void>;
-  onDestroy?(): void;
-}
+export type { SdkPlugin } from "@lizuz/mini-app-types";
 
 export class MiniAppSdk implements MiniAppSdkInterface {
   readonly miniAppId: string;

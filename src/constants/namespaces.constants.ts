@@ -2,6 +2,10 @@
  * Every RPC namespace the SDK talks to. Centralized so a typo in a module
  * implementation becomes a compile error (unknown property) instead of a
  * silently-broken runtime string.
+ *
+ * Mirrors `@lizuz/mini-app-types/src/constants.ts` — keep in sync.
+ * Runtime values are duplicated for bundling (types package is types-only);
+ * types are shared via `import type`.
  */
 export const NAMESPACES = {
   AUTH: "auth",

@@ -1,8 +1,6 @@
-export interface CircuitBreakerOptions {
-  threshold?: number;
-  windowMs?: number;
-  openMs?: number;
-}
+import type { CircuitBreakerOptions } from "@lizuz/mini-app-types";
+
+export type { CircuitBreakerOptions };
 
 type State = "closed" | "open" | "halfOpen";
 

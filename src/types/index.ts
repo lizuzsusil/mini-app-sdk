@@ -103,6 +103,7 @@ export type {
   ReliabilityOptions,
   SdkDebug,
   SdkDebugSnapshot,
+  SdkPlugin,
   SdkStatus,
 } from "./sdk.types";
 export { validateSdkOptions } from "./validate-options";

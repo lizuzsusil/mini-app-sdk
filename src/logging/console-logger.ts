@@ -1,23 +1,7 @@
+import type { ConsoleLoggerOptions } from "@lizuz/mini-app-types";
 import type { Logger } from "./logger";
 
-export interface ConsoleLoggerOptions {
-  /** Minimum level that actually gets written. Anything below this is dropped. Defaults to 'info'. */
-  minLevel?: "debug" | "info" | "warn" | "error";
-  /** Prefix prepended to every message, useful for telling multiple SDK instances apart in one console. Defaults to '[MiniAppSdk]'. */
-  prefix?: string;
-  /**
-   * Masks sensitive fields in `context` before a line is written. Either a
-   * `Set<string>` of top-level keys to redact unconditionally, or a
-   * predicate `(key, value) => boolean` for finer control. Redacted values
-   * are written as `"[REDACTED]"`. When `deep` is true, nested objects are
-   * walked and any matching key at any depth is redacted.
-   */
-  redact?: Set<string> | ((key: string, value: unknown) => boolean);
-  /** When true, `redact` walks nested objects/arrays. Default false (shallow). */
-  deep?: boolean;
-  /** Optional JSON formatting for host ingestion: when `"json"`, writes line as JSON string. */
-  format?: "text" | "json";
-}
+export type { ConsoleLoggerOptions } from "@lizuz/mini-app-types";
 
 const LEVEL_ORDER = { debug: 0, info: 1, warn: 2, error: 3 } as const;
 const REDACTED_MARKER = "[REDACTED]";
