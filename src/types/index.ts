@@ -92,12 +92,15 @@ export type {
   Query,
 } from "./http.types";
 export type {
+  AdaptiveTimeoutOptions,
+  CircuitBreakerOptions,
   Diagnostic,
   DiagnosticSeverity,
   HeartbeatOptions,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
   PendingRequestInfo,
+  ReliabilityOptions,
   SdkDebug,
   SdkDebugSnapshot,
   SdkStatus,

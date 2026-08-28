@@ -57,11 +57,15 @@ export type {
   Tracer,
 } from "./observability";
 export { NoopSpan, noopTracer } from "./observability";
+export type { OfflineQueueOptions } from "./offline/offline-queue";
+export { createOfflineQueuePlugin } from "./offline/offline-queue";
 export type {
   MessageType,
   PlatformError,
   PlatformMessage,
 } from "./protocol";
+export { AdaptiveTimeout } from "./reliability/adaptive-timeout";
+export { CircuitBreaker } from "./reliability/circuit-breaker";
 export type {
   RpcMiddleware,
   RpcMiddlewareContext,
@@ -70,8 +74,20 @@ export type {
   RpcStreamOptions,
 } from "./rpc";
 export { StreamBuilder } from "./stream";
-export type { Transport, TransportDebugInfo } from "./transport";
 export type {
+  Transport,
+  TransportDebugInfo,
+  WebSocketTransportOptions,
+} from "./transport";
+export {
+  BroadcastTransport,
+  DefaultTransport,
+  MessagePortTransport,
+  SsrTransport,
+  WebSocketTransport,
+} from "./transport";
+export type {
+  AdaptiveTimeoutOptions,
   ApiRequestParams,
   ApiResult,
   ApiSdkModule,
@@ -82,6 +98,7 @@ export type {
   ChatMessage,
   ChatRequestOptions,
   ChatSdkModule,
+  CircuitBreakerOptions,
   ConfigSdkModule,
   DeviceAction,
   DeviceBiometricOptions,
@@ -147,6 +164,7 @@ export type {
   PlatformTypes,
   PlatformUser,
   Query,
+  ReliabilityOptions,
   SdkDebug,
   SdkDebugSnapshot,
   SdkEventMap,

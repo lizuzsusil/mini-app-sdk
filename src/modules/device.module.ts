@@ -33,6 +33,10 @@ const DEVICE_ACTIONS: readonly DeviceAction[] = [
   "notifications",
   "network",
   "info",
+  "share",
+  "clipboard",
+  "haptics",
+  "review",
 ];
 
 export function createDeviceModule(rpc: RpcClient): DeviceSdkModuleWithGuards {
@@ -105,5 +109,28 @@ export function createDeviceModule(rpc: RpcClient): DeviceSdkModuleWithGuards {
 
     info: () =>
       rpc.request<DeviceInfoResult>(NAMESPACES.DEVICE, ACTIONS.DEVICE.INFO),
-  };
+
+    share: (data: { title?: string; text?: string; url?: string }) =>
+      rpc.request<{ completed: boolean }>(
+        NAMESPACES.DEVICE,
+        ACTIONS.DEVICE.SHARE,
+        data,
+      ),
+
+    clipboardWrite: (text: string) =>
+      rpc.request<void>(NAMESPACES.DEVICE, ACTIONS.DEVICE.CLIPBOARD_WRITE, {
+        text,
+      }),
+
+    clipboardRead: () =>
+      rpc
+        .request<{ text: string }>(
+          NAMESPACES.DEVICE,
+          ACTIONS.DEVICE.CLIPBOARD_READ,
+        )
+        .then((r) => (r as unknown as { text: string }).text ?? ""),
+
+    haptics: (style: "light" | "medium" | "heavy" | "selection" = "light") =>
+      rpc.request<void>(NAMESPACES.DEVICE, ACTIONS.DEVICE.HAPTICS, { style }),
+  } as unknown as DeviceSdkModuleWithGuards;
 }

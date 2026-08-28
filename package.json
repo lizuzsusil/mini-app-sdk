@@ -1,10 +1,9 @@
 {
   "name": "@lizuz/sewa-sdk",
   "version": "1.0.8",
-  "description": "Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell.",
+  "description": "Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell. Types are published separately via @lizuz/mini-app-types.",
   "main": "./dist/sewa-sdk.js",
   "module": "./dist/sewa-sdk.mjs",
-  "types": "./dist/sewa-sdk.d.ts",
   "browser": "./dist/sewa-sdk.min.js",
   "unpkg": "./dist/sewa-sdk.min.js",
   "jsdelivr": "./dist/sewa-sdk.min.js",
@@ -13,6 +12,22 @@
       "browser": "./dist/sewa-sdk.min.js",
       "import": "./dist/sewa-sdk.mjs",
       "require": "./dist/sewa-sdk.js"
+    },
+    "./device": {
+      "import": "./dist/device.mjs",
+      "require": "./dist/device.js"
+    },
+    "./http": {
+      "import": "./dist/http.mjs",
+      "require": "./dist/http.js"
+    },
+    "./storage": {
+      "import": "./dist/storage.mjs",
+      "require": "./dist/storage.js"
+    },
+    "./testing": {
+      "import": "./dist/testing.mjs",
+      "require": "./dist/testing.js"
     }
   },
   "files": [
@@ -30,8 +45,7 @@
     "typecheck": "tsc --noEmit",
     "build:lib": "tsup src/index.ts --format cjs,esm --clean --sourcemap && node scripts/rename-lib.mjs",
     "build:cdn": "esbuild src/cdn.ts --bundle --format=iife --platform=browser --target=es2020 --minify --sourcemap --outfile=dist/sewa-sdk.min.js",
-    "build:types": "tsc -p tsconfig.api.json && api-extractor run && rm -rf dist/types",
-    "build": "biome check --error-on-warnings --max-diagnostics=200 . && npm run build:lib && npm run build:cdn && npm run build:types && npm run size:check",
+    "build": "biome check --error-on-warnings --max-diagnostics=200 . && npm run build:lib && npm run build:cdn && npm run size:check",
     "size:check": "node scripts/check-size.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -44,7 +58,6 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.7",
     "@lizuz/mini-app-types": "^1.0.17",
-    "@microsoft/api-extractor": "^7.58.12",
     "esbuild": "^0.28.1",
     "jsdom": "^29.1.1",
     "tsup": "^8.5.1",

@@ -16,7 +16,11 @@ export type DeviceAction =
   | "biometric"
   | "notifications"
   | "network"
-  | "info";
+  | "info"
+  | "share"
+  | "clipboard"
+  | "haptics"
+  | "review";
 
 /**
  * The device module, plus a `isSupported` feature-detect guard. Mini apps
@@ -33,4 +37,16 @@ export interface DeviceSdkModuleWithGuards extends DeviceSdkModule {
    * call.
    */
   isSupported(action: DeviceAction): boolean;
+
+  /** Share sheet: delegates to host's native share. */
+  share?(data: {
+    title?: string;
+    text?: string;
+    url?: string;
+  }): Promise<{ completed: boolean }>;
+  /** Clipboard: write text (host may prompt permission). */
+  clipboardWrite?(text: string): Promise<void>;
+  clipboardRead?(): Promise<string>;
+  /** Haptics: trigger lightweight / medium / heavy / selection. */
+  haptics?(style: "light" | "medium" | "heavy" | "selection"): Promise<void>;
 }

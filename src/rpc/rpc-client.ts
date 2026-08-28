@@ -32,6 +32,8 @@ import {
   hasCompatibleMajorVersion,
   majorVersionsMatch,
 } from "../protocol";
+import { AdaptiveTimeout } from "../reliability/adaptive-timeout";
+import { CircuitBreaker } from "../reliability/circuit-breaker";
 import { StreamBuilder } from "../stream";
 import type { Transport, TransportDebugInfo } from "../transport";
 import type {
@@ -39,6 +41,7 @@ import type {
   OnEventOptions,
   PendingRequestInfo,
 } from "../types";
+import type { CircuitBreakerOptions } from "../types/sdk.types";
 import { computeBackoffMs, delay, generateId } from "../utils";
 import type { RpcMiddleware } from "./middleware";
 import { composeMiddleware } from "./middleware";
@@ -61,6 +64,12 @@ export interface RpcRequestOptions {
    * exactly like any other request failure.
    */
   mapPayload?: (payload: unknown) => unknown;
+  /**
+   * Opt-in deduplication: when true (default for idempotent reads), concurrent
+   * identical requests within 50ms share the same underlying promise.
+   * Pass `false` for side-effect actions (e.g. `device.location`).
+   */
+  dedupe?: boolean;
 }
 
 /** Per-stream control knobs passed to `sendStreamRequest()`. */
@@ -90,6 +99,15 @@ export interface RpcClientOptions {
   heartbeat?: HeartbeatOptions;
   /** Tuning for the request metrics recorder (percentile window, export hook). */
   metrics?: RpcMetricsOptions;
+  /** Circuit breaker tuning. Disabled when undefined. */
+  circuitBreaker?: CircuitBreakerOptions;
+  /** Adaptive timeout tuning. */
+  adaptiveTimeout?: {
+    enabled?: boolean;
+    factor?: number;
+    minMs?: number;
+    maxMs?: number;
+  };
   /**
    * Optional tracer for RPC observability. When omitted, a no-op tracer is
    * used and behavior is unchanged. See `observability/tracer.types.ts` for
@@ -126,6 +144,26 @@ const DEFAULT_MAX_MISSED_PONGS = 2;
 /** How many recent payloads per event the replay buffer retains. */
 const EVENT_REPLAY_BUFFER_SIZE = 5;
 
+/** Deduplication window for idempotent requests (ms). */
+const DEDUPE_WINDOW_MS = 50;
+
+/** Actions that are safe to deduplicate (idempotent reads). */
+const DEDUPE_ALLOW = new Set([
+  "auth.getUser",
+  "auth.isAuthenticated",
+  "permissions.has",
+  "permissions.list",
+  "flags.isEnabled",
+  "flags.getAll",
+  "config.get",
+  "config.getAll",
+  "navigation.getCurrent",
+  "storage.get",
+  "platform.getType",
+  "appearance.getLocale",
+  "appearance.getTheme",
+]);
+
 /**
  * Owns everything about *RPC semantics* as opposed to *message delivery*:
  * correlation ids, the pending-request map, timeout enforcement, retry
@@ -157,6 +195,15 @@ export class RpcClient {
   private readonly warnedUnavailableCapabilities = new Set<string>();
   private readonly traceId: string;
   private started = false;
+  private readonly dedupeMap = new Map<
+    string,
+    { promise: Promise<unknown>; expiresAt: number }
+  >();
+  private readonly eventInterceptors: Array<
+    (event: string, payload: unknown) => unknown | false
+  > = [];
+  private readonly circuitBreaker: CircuitBreaker | null;
+  private readonly adaptiveTimeout: AdaptiveTimeout | null;
 
   /** Set while a reconnect (re-run of the handshake) is in progress. */
   private reconnectInProgress = false;
@@ -185,6 +232,7 @@ export class RpcClient {
    * is exactly today's behavior for such a host.
    */
   private negotiatedCapabilities: string[] | null = null;
+  private negotiatedCapabilityVersions: Record<string, string> | null = null;
 
   constructor(transport: Transport, options: RpcClientOptions) {
     this.transport = transport;
@@ -200,6 +248,16 @@ export class RpcClient {
     this.metricsRecorder = new MetricsRecorder(options.metrics);
     this.tracer = options.tracer ?? noopTracer;
     this.traceId = generateId();
+    this.circuitBreaker = options.circuitBreaker
+      ? new CircuitBreaker(options.circuitBreaker)
+      : null;
+    this.adaptiveTimeout = options.adaptiveTimeout?.enabled
+      ? new AdaptiveTimeout({
+          factor: options.adaptiveTimeout.factor,
+          minMs: options.adaptiveTimeout.minMs,
+          maxMs: options.adaptiveTimeout.maxMs,
+        })
+      : null;
   }
 
   /** Begin listening for inbound messages via the injected `Transport`. */
@@ -275,6 +333,7 @@ export class RpcClient {
       miniAppId: this.miniAppId,
       sdkVersion: RPC_CLIENT_SDK_VERSION,
       protocolVersion: PROTOCOL_VERSION,
+      protocolVersionRange: `^${PROTOCOL_VERSION}`,
       capabilities: SDK_CAPABILITIES,
     };
 
@@ -333,6 +392,22 @@ export class RpcClient {
   }
 
   /**
+   * Registers an event interceptor that can transform or filter inbound
+   * events before they reach `onEvent` handlers. Return `false` to drop the
+   * event, or a new payload to transform it. Interceptors run in
+   * registration order.
+   */
+  addEventInterceptor(
+    interceptor: (event: string, payload: unknown) => unknown | false,
+  ): () => void {
+    this.eventInterceptors.push(interceptor);
+    return () => {
+      const idx = this.eventInterceptors.indexOf(interceptor);
+      if (idx !== -1) this.eventInterceptors.splice(idx, 1);
+    };
+  }
+
+  /**
    * Sends a request and resolves with the host's response payload. Passes
    * through any registered middleware, then through the retry loop
    * described on `executeWithRetry`. An optional `AbortSignal` in `options`
@@ -351,33 +426,149 @@ export class RpcClient {
     options?: RpcRequestOptions,
   ): Promise<T> {
     this.warnOnUnavailableCapability(namespace, action);
+    if (
+      this.circuitBreaker &&
+      !this.circuitBreaker.shouldAllow(namespace, action)
+    ) {
+      throw new ProtocolError({
+        reason: "host-rejected",
+        message: `Circuit open for "${namespace}.${action}" — host is degraded, failing fast`,
+        platformError: { code: "CIRCUIT_OPEN", message: "Circuit open" },
+      });
+    }
+    // Deduplication: share promise for concurrent identical idempotent requests.
+    const dedupeKey = `${namespace}.${action}:${JSON.stringify(payload ?? null)}`;
+    const shouldDedupe =
+      options?.dedupe !== false &&
+      !options?.signal &&
+      !options?.mapPayload &&
+      DEDUPE_ALLOW.has(`${namespace}.${action}`);
+    if (shouldDedupe) {
+      const existing = this.dedupeMap.get(dedupeKey);
+      if (existing && Date.now() < existing.expiresAt) {
+        return existing.promise as Promise<T>;
+      }
+    }
     const span = this.tracer.startSpan("rpc.request", {
       namespace,
       action,
       traceId: this.traceId,
     });
-    try {
-      return await composeMiddleware<T>(
-        this.middlewares,
-        { namespace, action, payload, attempt: 0 },
-        () =>
-          this.executeWithRetry<T>(namespace, action, payload, options, span),
-      );
-    } catch (error) {
-      span.setAttribute(
-        "error",
-        error instanceof Error ? error.message : String(error),
-      );
-      span.setAttribute(
-        "retryable",
-        error instanceof Error && "retryable" in error
-          ? Boolean((error as { retryable?: boolean }).retryable)
-          : false,
-      );
-      throw error;
-    } finally {
-      span.end();
+    const promise = (async (): Promise<T> => {
+      try {
+        return await composeMiddleware<T>(
+          this.middlewares,
+          { namespace, action, payload, attempt: 0 },
+          () =>
+            this.executeWithRetry<T>(namespace, action, payload, options, span),
+        );
+      } catch (error) {
+        span.setAttribute(
+          "error",
+          error instanceof Error ? error.message : String(error),
+        );
+        span.setAttribute(
+          "retryable",
+          error instanceof Error && "retryable" in error
+            ? Boolean((error as { retryable?: boolean }).retryable)
+            : false,
+        );
+        throw error;
+      } finally {
+        span.end();
+      }
+    })();
+    const tracked: Promise<T> = promise.then(
+      (value) => {
+        this.circuitBreaker?.recordSuccess(namespace, action);
+        if (this.adaptiveTimeout)
+          this.adaptiveTimeout.observe(this.metricsRecorder.snapshot());
+        return value;
+      },
+      (error: unknown) => {
+        const isCancelled = error instanceof RequestCancelledError;
+        if (!isCancelled) this.circuitBreaker?.recordFailure(namespace, action);
+        throw error;
+      },
+    );
+    if (shouldDedupe) {
+      this.dedupeMap.set(dedupeKey, {
+        promise: tracked,
+        expiresAt: Date.now() + DEDUPE_WINDOW_MS,
+      });
+      tracked
+        .catch(() => {})
+        .finally(() => {
+          setTimeout(() => {
+            const e = this.dedupeMap.get(dedupeKey);
+            if (e?.promise === tracked) this.dedupeMap.delete(dedupeKey);
+          }, DEDUPE_WINDOW_MS + 10);
+        });
+      return tracked;
     }
+    return tracked;
+  }
+
+  /**
+   * Batch variant: executes multiple requests. If host negotiated `batch`
+   * capability, sends a single `batch.execute` envelope; otherwise fans out
+   * in parallel (per-request retry/middleware still apply). Returns per-item
+   * `{ok, value|error}` to preserve partial success semantics.
+   */
+  async batch(
+    requests: Array<{
+      namespace: string;
+      action: string;
+      payload?: unknown;
+      options?: RpcRequestOptions;
+    }>,
+  ): Promise<
+    Array<{ ok: true; value: unknown } | { ok: false; error: Error }>
+  > {
+    if (this.negotiatedCapabilities?.includes("batch")) {
+      try {
+        const result = await this.request<{
+          results: Array<{ ok: boolean; value?: unknown; error?: unknown }>;
+        }>("batch", "execute", {
+          requests: requests.map((r) => ({
+            namespace: r.namespace,
+            action: r.action,
+            payload: r.payload,
+          })),
+        });
+        return (result.results ?? []).map((r) =>
+          r.ok
+            ? { ok: true as const, value: r.value as unknown }
+            : {
+                ok: false as const,
+                error:
+                  r.error instanceof Error
+                    ? r.error
+                    : new Error(String(r.error)),
+              },
+        );
+      } catch {
+        // fall back to parallel on batch failure
+      }
+    }
+    return Promise.all(
+      requests.map(async (r) => {
+        try {
+          const v = await this.request(
+            r.namespace,
+            r.action,
+            r.payload,
+            r.options,
+          );
+          return { ok: true as const, value: v };
+        } catch (error) {
+          return {
+            ok: false as const,
+            error: error instanceof Error ? error : new Error(String(error)),
+          };
+        }
+      }),
+    );
   }
 
   /**
@@ -762,6 +953,18 @@ export class RpcClient {
     return this.negotiatedCapabilities ?? [];
   }
 
+  getCapabilityVersions(): Readonly<Record<string, string>> {
+    return this.negotiatedCapabilityVersions ?? {};
+  }
+
+  getCircuitState(namespace: string, action: string): string {
+    return this.circuitBreaker?.getState(namespace, action) ?? "closed";
+  }
+
+  getAdaptiveTimeoutProposal(): number | null {
+    return this.adaptiveTimeout?.propose() ?? null;
+  }
+
   /**
    * A point-in-time snapshot of every request this client has made:
    * totals plus a per-`namespace.action` breakdown of counts, timings,
@@ -810,11 +1013,14 @@ export class RpcClient {
    * exists, so first registering a listener marks the connection "live".
    */
   private emitLocalEvent(event: string, payload: unknown): void {
-    this.bufferEvent(event, payload);
+    const intercepted = this.runEventInterceptors(event, payload);
+    if (intercepted === false) return;
+    const finalPayload = intercepted;
+    this.bufferEvent(event, finalPayload);
     const handlers = this.eventHandlers.get(event);
     handlers?.forEach((handler) => {
       try {
-        handler(payload);
+        handler(finalPayload);
       } catch (error) {
         this.logger.warn(`Event handler for "${event}" threw`, {
           error: error instanceof Error ? error.message : String(error),
@@ -962,12 +1168,24 @@ export class RpcClient {
     }
 
     if (ack.capabilities) {
-      this.negotiatedCapabilities = SDK_CAPABILITIES.filter((capability) =>
-        ack.capabilities?.includes(capability),
-      );
-      this.logger.debug("Negotiated capabilities with host", {
-        capabilities: this.negotiatedCapabilities,
-      });
+      if (Array.isArray(ack.capabilities)) {
+        this.negotiatedCapabilities = SDK_CAPABILITIES.filter((capability) =>
+          (ack.capabilities as string[])?.includes(capability),
+        );
+        this.logger.debug("Negotiated capabilities with host", {
+          capabilities: this.negotiatedCapabilities,
+        });
+      } else if (typeof ack.capabilities === "object") {
+        const capMap = ack.capabilities as Record<string, string>;
+        this.negotiatedCapabilityVersions = { ...capMap };
+        this.negotiatedCapabilities = Object.keys(capMap).filter((cap) =>
+          SDK_CAPABILITIES.includes(cap),
+        );
+        this.logger.debug("Negotiated capabilities (version map) with host", {
+          capabilities: this.negotiatedCapabilities,
+          versions: this.negotiatedCapabilityVersions,
+        });
+      }
     } else {
       this.negotiatedCapabilities = [...SDK_CAPABILITIES];
       this.logger.debug(
@@ -1160,11 +1378,48 @@ export class RpcClient {
 
     if (message.type === "event") {
       const key = `${message.namespace}.${message.action}`;
-      this.bufferEvent(key, message.payload);
+      let payload: unknown = message.payload;
+      for (const interceptor of this.eventInterceptors) {
+        try {
+          const result = interceptor(key, payload);
+          if (result === false) return;
+          if (result !== undefined) payload = result;
+        } catch (error) {
+          this.logger.warn(`Event interceptor for "${key}" threw`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      this.bufferEvent(key, payload);
       const handlers = this.eventHandlers.get(key);
       handlers?.forEach((handler) => {
-        handler(message.payload);
+        try {
+          handler(payload);
+        } catch (error) {
+          this.logger.warn(`Event handler for "${key}" threw`, {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       });
     }
+  }
+
+  private runEventInterceptors(
+    event: string,
+    payload: unknown,
+  ): unknown | false {
+    let current: unknown = payload;
+    for (const interceptor of this.eventInterceptors) {
+      try {
+        const result = interceptor(event, current);
+        if (result === false) return false;
+        if (result !== undefined) current = result;
+      } catch (error) {
+        this.logger.warn(`Event interceptor for "${event}" threw`, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return current;
   }
 }

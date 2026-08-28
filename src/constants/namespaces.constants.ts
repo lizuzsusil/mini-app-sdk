@@ -90,6 +90,11 @@ export const ACTIONS = {
     NOTIFICATIONS: "notifications",
     NETWORK: "network",
     INFO: "info",
+    SHARE: "share",
+    CLIPBOARD_WRITE: "clipboardWrite",
+    CLIPBOARD_READ: "clipboardRead",
+    HAPTICS: "haptics",
+    REVIEW: "review",
   },
   HTTP: {
     GET: "get",

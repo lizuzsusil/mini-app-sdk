@@ -27,6 +27,18 @@ export interface DefaultTransportOptions {
    * point goes there directly instead of broadcasting to `'*'`.
    */
   allowedOrigin?: string;
+  /**
+   * Whether to listen on the `CustomEvent` channel (`gov-platform-event`).
+   * Default `true` for backward compat with Flutter WebView bridges; set
+   * `false` to harden — CustomEvent has no origin, so it bypasses origin
+   * checks. Hosts using only `postMessage` should disable it.
+   */
+  allowCustomEvent?: boolean;
+  /**
+   * When true, `send()` warns if `targetOrigin` is still `*` (unpinned)
+   * outside local dev. Useful to surface “origin not pinned” in prod.
+   */
+  warnOnBroadcast?: boolean;
 }
 
 /**
@@ -49,6 +61,8 @@ export class DefaultTransport implements Transport {
   private messageListener: ((event: MessageEvent) => void) | null = null;
   private customEventListener: ((event: Event) => void) | null = null;
   private started = false;
+  private readonly allowCustomEvent: boolean;
+  private readonly warnOnBroadcast: boolean;
 
   /** The origin outbound messages are sent to, and inbound messages are checked against once set. */
   private pinnedOrigin: string | null;
@@ -59,6 +73,8 @@ export class DefaultTransport implements Transport {
     this.logger = options.logger ?? noopLogger;
     this.pinnedOrigin = options.allowedOrigin ?? null;
     this.originLocked = options.allowedOrigin !== undefined;
+    this.allowCustomEvent = options.allowCustomEvent ?? true;
+    this.warnOnBroadcast = options.warnOnBroadcast ?? false;
   }
 
   start(onMessage: (message: PlatformMessage) => void): void {
@@ -101,28 +117,35 @@ export class DefaultTransport implements Transport {
     };
     window.addEventListener("message", this.messageListener);
 
-    this.customEventListener = (event: Event) => {
-      const detail = (event as CustomEvent<unknown>).detail;
-      if (!isValidPlatformMessage(detail)) {
-        const d = detail as Record<string, unknown> | null;
-        if (
-          d &&
-          typeof d === "object" &&
-          (d as Record<string, unknown>).channel === MESSAGE_CHANNEL
-        ) {
-          const result = validatePlatformMessage(detail);
-          this.logger.debug("Dropped invalid SDK message on CustomEvent", {
-            reason: result.reason,
-          });
+    if (this.allowCustomEvent) {
+      this.customEventListener = (event: Event) => {
+        const detail = (event as CustomEvent<unknown>).detail;
+        if (!isValidPlatformMessage(detail)) {
+          const d = detail as Record<string, unknown> | null;
+          if (
+            d &&
+            typeof d === "object" &&
+            (d as Record<string, unknown>).channel === MESSAGE_CHANNEL
+          ) {
+            const result = validatePlatformMessage(detail);
+            this.logger.debug("Dropped invalid SDK message on CustomEvent", {
+              reason: result.reason,
+            });
+          }
+          return;
         }
-        return;
-      }
-      onMessage(detail);
-    };
-    window.addEventListener(PLATFORM_EVENT_NAME, this.customEventListener);
+        onMessage(detail);
+      };
+      window.addEventListener(PLATFORM_EVENT_NAME, this.customEventListener);
+    } else {
+      this.logger.debug(
+        "CustomEvent channel disabled (allowCustomEvent:false)",
+      );
+    }
 
     this.logger.debug("DefaultTransport started", {
       allowedOrigin: this.pinnedOrigin ?? "(learned on first message)",
+      allowCustomEvent: this.allowCustomEvent,
     });
     this.started = true;
   }
@@ -160,6 +183,12 @@ export class DefaultTransport implements Transport {
     }
 
     const targetOrigin = this.pinnedOrigin ?? BROADCAST_TARGET;
+    if (this.warnOnBroadcast && targetOrigin === BROADCAST_TARGET) {
+      this.logger.warn(
+        'Sending to "*" — origin not pinned. Set allowedOrigin/targetOrigin to harden.',
+        { namespace: message.namespace, action: message.action },
+      );
+    }
 
     try {
       window.parent.postMessage(message, targetOrigin);

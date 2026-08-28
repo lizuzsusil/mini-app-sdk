@@ -222,6 +222,28 @@ export interface MiniAppSdkInterface {
     onInitialize?(): Promise<void>;
     onDestroy?(): void;
   }): Promise<void>;
+
+  /**
+   * Batch multiple requests. Falls back to parallel fan-out if host does not
+   * support `batch.execute`. Returns per-item ok/error to preserve partial
+   * success.
+   */
+  batch(
+    requests: Array<{
+      namespace: string;
+      action: string;
+      payload?: unknown;
+      options?: RpcRequestOptions;
+    }>,
+  ): Promise<Array<{ ok: true; value: unknown } | { ok: false; error: Error }>>;
+
+  /** Registers an event interceptor (see `RpcClient.addEventInterceptor`). */
+  addEventInterceptor(
+    interceptor: (event: string, payload: unknown) => unknown | false,
+  ): () => void;
+
+  /** Capability versions when host sent a version map, else empty. */
+  get capabilityVersions(): Readonly<Record<string, string>>;
 }
 
 /**
@@ -235,6 +257,27 @@ export interface HeartbeatOptions {
   timeoutMs?: number;
   /** Consecutive missed pongs before the connection is declared lost. Defaults to 2. */
   maxMissedPongs?: number;
+}
+
+export interface CircuitBreakerOptions {
+  /** Failures within `windowMs` to open the circuit. Default 5. */
+  threshold?: number;
+  /** Window for counting failures in ms. Default 10000. */
+  windowMs?: number;
+  /** Time the circuit stays open before half-open trial in ms. Default 30000. */
+  openMs?: number;
+}
+
+export interface AdaptiveTimeoutOptions {
+  enabled?: boolean;
+  factor?: number;
+  minMs?: number;
+  maxMs?: number;
+}
+
+export interface ReliabilityOptions {
+  circuitBreaker?: CircuitBreakerOptions;
+  adaptiveTimeout?: AdaptiveTimeoutOptions;
 }
 
 /**
@@ -281,4 +324,11 @@ export interface MiniAppSdkOptions {
    * metrics instead of polling `sdk.getMetrics()`.
    */
   metrics?: RpcMetricsOptions;
+  /** Reliability tuning for circuit breaker and adaptive timeout. Off by default. */
+  reliability?: ReliabilityOptions;
+  /**
+   * Security: whether CustomEvent channel is allowed. Default true for compat;
+   * set false to harden (postMessage only).
+   */
+  allowCustomEvent?: boolean;
 }

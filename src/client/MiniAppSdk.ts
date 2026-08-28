@@ -186,6 +186,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       new DefaultTransport({
         logger: this.logger,
         allowedOrigin: dependencies.allowedOrigin,
+        allowCustomEvent: options.allowCustomEvent,
       });
     this.rpc = new RpcClient(transport, {
       miniAppId: options.miniAppId,
@@ -197,6 +198,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       devMode,
       heartbeat: options.heartbeat,
       metrics: options.metrics,
+      circuitBreaker: options.reliability?.circuitBreaker,
+      adaptiveTimeout: options.reliability?.adaptiveTimeout,
       tracer: dependencies.tracer,
     });
     this.traceId = this.rpc.getTraceId();
@@ -763,6 +766,29 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     return this.rpc.getMetrics();
   }
 
+  batch(
+    requests: Array<{
+      namespace: string;
+      action: string;
+      payload?: unknown;
+      options?: RpcRequestOptions;
+    }>,
+  ): Promise<
+    Array<{ ok: true; value: unknown } | { ok: false; error: Error }>
+  > {
+    return this.rpc.batch(requests);
+  }
+
+  addEventInterceptor(
+    interceptor: (event: string, payload: unknown) => unknown | false,
+  ): () => void {
+    return this.rpc.addEventInterceptor(interceptor);
+  }
+
+  get capabilityVersions(): Readonly<Record<string, string>> {
+    return this.rpc.getCapabilityVersions();
+  }
+
   /**
    * Adds a module beyond the built-in ones — for a host-specific capability
    * or a vendor's own namespace — without needing to fork the SDK. The
@@ -782,9 +808,30 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.build(this.rpc);
   }
 
+  /**
+   * Registers a lazy module factory that is only resolved on first `getModuleAsync()` /
+   * `buildAsync()`. Keeps the initial bundle small for tree-shakable imports.
+   */
+  registerLazyModule<T>(
+    name: string,
+    factory: () =>
+      | Promise<(rpc: import("../rpc").RpcClient) => T>
+      | ((rpc: import("../rpc").RpcClient) => T),
+  ): void {
+    this.registry.registerLazy(
+      name,
+      factory as unknown as import("../modules/module-registry").LazyModuleFactory,
+    );
+  }
+
   /** Retrieves a module registered via `registerModule()` (or any built-in module, by its namespace name). */
   getModule<T>(name: string): T | undefined {
     return this.registry.get<T>(name);
+  }
+
+  /** Async variant that resolves lazy factories (`registerLazyModule`). */
+  async getModuleAsync<T>(name: string): Promise<T | undefined> {
+    return this.registry.getAsync<T>(name, this.rpc);
   }
 
   /**

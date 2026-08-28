@@ -70,6 +70,35 @@ export function createStorageModule(rpc: RpcClient): StorageSdkModule {
     };
   };
 
+  const getMany = async (keys: string[]): Promise<Array<string | null>> => {
+    const results = await rpc.batch(
+      keys.map((key) => ({
+        namespace: NAMESPACES.STORAGE,
+        action: ACTIONS.STORAGE.GET,
+        payload: { key },
+      })),
+    );
+    return results.map((r) => {
+      if (r.ok)
+        return ((r.value as StorageRpcResult)?.value ?? null) as string | null;
+      return null;
+    });
+  };
+
+  const getManyJson = async <T = unknown>(
+    keys: string[],
+  ): Promise<Array<T | null>> => {
+    const raws = await getMany(keys);
+    return raws.map((raw) => {
+      if (raw === null) return null;
+      try {
+        return JSON.parse(raw) as T;
+      } catch {
+        return null;
+      }
+    });
+  };
+
   return {
     get: rawGet,
     getJson,
@@ -77,5 +106,18 @@ export function createStorageModule(rpc: RpcClient): StorageSdkModule {
     setJson,
     remove: rawRemove,
     scoped,
+    getMany: getMany as unknown as StorageSdkModule["get"] extends (
+      ...args: unknown[]
+    ) => unknown
+      ? unknown
+      : never,
+    getManyJson: getManyJson as unknown as StorageSdkModule["get"] extends (
+      ...args: unknown[]
+    ) => unknown
+      ? unknown
+      : never,
+  } as StorageSdkModule & {
+    getMany(keys: string[]): Promise<Array<string | null>>;
+    getManyJson<T>(keys: string[]): Promise<Array<T | null>>;
   };
 }

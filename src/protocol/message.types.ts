@@ -63,6 +63,8 @@ export interface HandshakePayload {
   miniAppId: string;
   sdkVersion: string;
   protocolVersion: string;
+  /** Optional range like "^1.0.0" for future minor negotiation; hosts may advertise supportedVersions. */
+  protocolVersionRange?: string;
   capabilities: string[];
 }
 
@@ -72,10 +74,16 @@ export interface HandshakePayload {
  * yet still completes a handshake successfully — the SDK only tightens its
  * behavior (rejecting a mismatched version, narrowing capabilities) when a
  * host actually reports something to react to.
+ *
+ * `capabilities` may be either `string[]` (legacy) or a version map
+ * `Record<string,string>` like `{storage:"1.2.0", http:"2.0.0"}` for
+ * per-namespace version negotiation. A `supportedVersions` array may also
+ * be present for protocol version range negotiation.
  */
 export interface HandshakeAckPayload {
   status?: "ok" | "rejected";
   reason?: string;
   protocolVersion?: string;
-  capabilities?: string[];
+  supportedVersions?: string[];
+  capabilities?: string[] | Record<string, string>;
 }
