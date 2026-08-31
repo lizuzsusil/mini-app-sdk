@@ -517,7 +517,7 @@ describe("RpcClient dev-mode capability warnings", () => {
     return promise;
   }
 
-  it("warns once when a request targets a namespace the host did not negotiate", async () => {
+  it("throws when a request targets a namespace the host did not negotiate (strict gate)", async () => {
     const transport = new FakeTransport();
     const logger = loggerSpy();
     const client = new RpcClient(transport, {
@@ -529,18 +529,17 @@ describe("RpcClient dev-mode capability warnings", () => {
     client.start();
     await handshakeWithCapabilities(transport, client, ["auth"]);
 
-    const p1 = client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION);
-    const sent1 = transport.lastSent!;
-    const p2 = client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION);
-    const sent2 = transport.lastSent!;
-
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("device.location"),
-    );
-
-    await resolveRequest(transport, sent1, p1);
-    await resolveRequest(transport, sent2, p2);
+    await expect(client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION)).rejects.toMatchObject({ code: "CAPABILITY_NOT_SUPPORTED" });
+    await expect(client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION)).rejects.toMatchObject({ code: "CAPABILITY_NOT_SUPPORTED" });
+    // GIC_CHAT is gated by HTTP, not its own namespace
+    await expect(client.request(NAMESPACES.GIC_CHAT, ACTIONS.GIC_CHAT.START_SESSION)).rejects.toMatchObject({ code: "CAPABILITY_NOT_SUPPORTED" });
+    // After HTTP is negotiated, GIC should pass
+    const transport2 = new FakeTransport();
+    const client2 = new RpcClient(transport2, { miniAppId: "test-mini-app", timeout: 5000, devMode: true, logger });
+    client2.start();
+    await handshakeWithCapabilities(transport2, client2, ["http"]);
+    const p = client2.request(NAMESPACES.GIC_CHAT, ACTIONS.GIC_CHAT.START_SESSION);
+    await resolveRequest(transport2, transport2.lastSent!, p);
   });
 
   it("does not warn for negotiated or protocol-level namespaces", async () => {
@@ -566,7 +565,7 @@ describe("RpcClient dev-mode capability warnings", () => {
     await resolveRequest(transport, sent2, p2);
   });
 
-  it("does not warn when devMode is off", async () => {
+  it("throws regardless of devMode when capability not negotiated (strict gate)", async () => {
     const transport = new FakeTransport();
     const logger = loggerSpy();
     const client = new RpcClient(transport, {
@@ -578,11 +577,8 @@ describe("RpcClient dev-mode capability warnings", () => {
     client.start();
     await handshakeWithCapabilities(transport, client, ["auth"]);
 
-    const p = client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION);
-    const sent = transport.lastSent!;
+    await expect(client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION)).rejects.toMatchObject({ code: "CAPABILITY_NOT_SUPPORTED" });
     expect(logger.warn).not.toHaveBeenCalled();
-
-    await resolveRequest(transport, sent, p);
   });
 });
 
@@ -596,8 +592,8 @@ describe("RpcClient stream requests", () => {
   ) {
     const message = createMessage(
       "stream",
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
       HOST_TARGET,
       "test-mini-app",
       data,
@@ -618,14 +614,14 @@ describe("RpcClient stream requests", () => {
     const client = makeClient(transport);
     client.start();
 
-    await client.sendStreamRequest(NAMESPACES.AI, ACTIONS.AI.CHAT, {
+    await client.sendStreamRequest(NAMESPACES.HTTP, ACTIONS.HTTP.CHAT_STREAM, {
       messages: [{ role: "user", content: "Hi" }],
     });
 
     const sent = transport.lastSent!;
     expect(sent.type).toBe("request");
-    expect(sent.namespace).toBe("ai");
-    expect(sent.action).toBe("chat");
+    expect(sent.namespace).toBe("http");
+    expect(sent.action).toBe("chatStream");
     expect(sent.target).toBe(HOST_TARGET);
     expect(sent.source).toBe("test-mini-app");
   });
@@ -636,8 +632,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
     );
     const sent = transport.lastSent!;
 
@@ -666,8 +662,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
     );
     const sent = transport.lastSent!;
 
@@ -704,8 +700,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
     );
     const sent = transport.lastSent!;
 
@@ -732,8 +728,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builder = await client.sendStreamRequest(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
     );
     await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(TimeoutError);
   });
@@ -744,8 +740,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builder = await client.sendStreamRequest(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
     );
     client.stop();
 
@@ -978,8 +974,8 @@ describe("RpcClient stream cancellation", () => {
 
     const controller = new AbortController();
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
       undefined,
       { signal: controller.signal },
     );
@@ -995,7 +991,7 @@ describe("RpcClient stream cancellation", () => {
 
     const cancel = transport.sent.find(
       (m) =>
-        m.namespace === NAMESPACES.AI && m.action === ACTIONS.AI.CANCEL,
+        m.namespace === NAMESPACES.HTTP && m.action === ACTIONS.HTTP.CANCEL,
     );
     expect(cancel).toBeDefined();
     expect((cancel!.payload as { requestId: string }).requestId).toBe(
@@ -1012,8 +1008,8 @@ describe("RpcClient stream cancellation", () => {
     controller.abort();
 
     const builder = await client.sendStreamRequest(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
       undefined,
       { signal: controller.signal },
     );
@@ -1025,7 +1021,7 @@ describe("RpcClient stream cancellation", () => {
     expect(
       transport.sent.some(
         (m) =>
-          m.namespace === NAMESPACES.AI && m.action === ACTIONS.AI.CANCEL,
+          m.namespace === NAMESPACES.HTTP && m.action === ACTIONS.HTTP.CANCEL,
       ),
     ).toBe(true);
   });
@@ -1036,8 +1032,8 @@ describe("RpcClient stream cancellation", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
     );
     const sent = transport.lastSent!;
     const builder = await builderPromise;
@@ -1050,7 +1046,7 @@ describe("RpcClient stream cancellation", () => {
     expect(
       transport.sent.some(
         (m) =>
-          m.namespace === NAMESPACES.AI && m.action === ACTIONS.AI.CANCEL,
+          m.namespace === NAMESPACES.HTTP && m.action === ACTIONS.HTTP.CANCEL,
       ),
     ).toBe(true);
   });
@@ -1291,8 +1287,8 @@ describe("RpcClient tracing", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.AI,
-      ACTIONS.AI.CHAT,
+      NAMESPACES.HTTP,
+      ACTIONS.HTTP.CHAT_STREAM,
     );
     const sent = transport.lastSent!;
     const chunk = createMessage(
@@ -1311,7 +1307,7 @@ describe("RpcClient tracing", () => {
 
     const span = tracer.spans.find((s) => s.name === "rpc.stream");
     expect(span).toBeDefined();
-    expect(span!.attributes).toMatchObject({ namespace: "ai", action: "chat" });
+    expect(span!.attributes).toMatchObject({ namespace: "http", action: "chatStream" });
     expect(span!.ended).toBe(true);
   });
 

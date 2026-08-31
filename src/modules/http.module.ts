@@ -113,7 +113,7 @@ export function createHttpModule(rpc: RpcClient): HttpSdkModule {
     }) =>
       rpc.sendStreamRequest(
         NAMESPACES.HTTP,
-        ACTIONS.HTTP.STREAM,
+        ACTIONS.HTTP.CHAT_STREAM,
         params,
       ) as Promise<T>,
   };

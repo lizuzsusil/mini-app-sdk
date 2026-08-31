@@ -19,12 +19,12 @@ export const NAMESPACES = {
   STORAGE: "storage",
   HTTP: "http",
   APPEARANCE: "appearance",
-  AI: "ai",
   NOTIFICATIONS: "notifications",
   LINKS: "links",
   EVENT: "event",
   HANDSHAKE: "handshake",
   HEARTBEAT: "heartbeat",
+  AI: "ai",
   GIC_CHAT: "gic-chat",
 } as const;
 
@@ -49,9 +49,9 @@ export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.API,
   NAMESPACES.HTTP,
   NAMESPACES.APPEARANCE,
-  NAMESPACES.AI,
   NAMESPACES.NOTIFICATIONS,
   NAMESPACES.LINKS,
+  NAMESPACES.AI,
   NAMESPACES.GIC_CHAT,
 ];
 
@@ -108,8 +108,15 @@ export const ACTIONS = {
     PUT: "put",
     PATCH: "patch",
     DELETE: "delete",
-    STREAM: "stream",
+    /** Generic chat streaming — CHAT_STREAM is the new name for the old STREAM; both mean the same. File streaming stays GET_STREAM. */
+    CHAT_STREAM: "chatStream",
+    /** @deprecated alias — use CHAT_STREAM */
+    STREAM: "chatStream",
+    /** File/binary streaming — keep as-is (Uint8Array) */
     GET_STREAM: "getStream",
+    CANCEL: "cancel",
+    /** @deprecated alias — use GIC_CHAT.START_SESSION (HTTP capability gated) */
+    GIC_START_SESSION: "gicStartSession",
   },
   STORAGE: {
     GET: "get",
@@ -123,15 +130,15 @@ export const ACTIONS = {
     GET_LOCALE: "getLocale",
     GET_THEME: "getTheme",
   },
-  AI: {
-    CHAT: "chat",
-    CANCEL: "cancel",
-  },
   NOTIFICATIONS: {
     REGISTER: "register",
   },
   LINKS: {
     OPEN: "open",
+  },
+  AI: {
+    CHAT: "chat",
+    CANCEL: "cancel",
   },
   GIC_CHAT: {
     START_SESSION: "startSession",

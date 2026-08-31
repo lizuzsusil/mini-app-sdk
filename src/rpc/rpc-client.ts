@@ -11,6 +11,7 @@ import {
   HandshakeError,
   ProtocolError,
   RequestCancelledError,
+  SdkError,
   TimeoutError,
 } from "../errors";
 import type { Logger } from "../logging";
@@ -425,6 +426,7 @@ export class RpcClient {
     payload?: unknown,
     options?: RpcRequestOptions,
   ): Promise<T> {
+    this.assertCapability(namespace, action);
     this.warnOnUnavailableCapability(namespace, action);
     if (
       this.circuitBreaker &&
@@ -571,6 +573,37 @@ export class RpcClient {
     );
   }
 
+  /** GIC_CHAT is gated by HTTP, not its own namespace — keep single HTTP gate per spec. */
+  private getRequiredCapability(namespace: string): string {
+    if (namespace === NAMESPACES.GIC_CHAT) return NAMESPACES.HTTP;
+    return namespace;
+  }
+
+  private assertCapability(namespace: string, action: string): void {
+    if (!this.negotiatedCapabilities) return;
+    const required = this.getRequiredCapability(namespace);
+    if (!(SDK_CAPABILITIES as readonly string[]).includes(required)) return;
+    // Core namespaces are always granted by host (see host/rpc/capabilities.ts CORE_CAPABILITIES) — don't gate them
+    if (
+      (
+        [
+          NAMESPACES.PLATFORM,
+          NAMESPACES.HANDSHAKE,
+          NAMESPACES.EVENT,
+          NAMESPACES.APPEARANCE,
+          NAMESPACES.NAVIGATION,
+          NAMESPACES.AUTH,
+        ] as readonly string[]
+      ).includes(required)
+    )
+      return;
+    if (this.negotiatedCapabilities.includes(required)) return;
+    throw new SdkError({
+      code: "CAPABILITY_NOT_SUPPORTED",
+      message: `"${namespace}.${action}" requires the "${required}" capability, but the host did not negotiate it`,
+    });
+  }
+
   /**
    * Dev-mode helper: once the handshake has completed, warn once per
    * `namespace.action` when the namespace is a domain capability this SDK
@@ -581,14 +614,28 @@ export class RpcClient {
   private warnOnUnavailableCapability(namespace: string, action: string): void {
     if (!this.devMode) return;
     if (!this.negotiatedCapabilities) return;
-    if (!SDK_CAPABILITIES.includes(namespace)) return;
-    if (this.negotiatedCapabilities.includes(namespace)) return;
+    const required = this.getRequiredCapability(namespace);
+    if (!(SDK_CAPABILITIES as readonly string[]).includes(required)) return;
+    if (
+      (
+        [
+          NAMESPACES.PLATFORM,
+          NAMESPACES.HANDSHAKE,
+          NAMESPACES.EVENT,
+          NAMESPACES.APPEARANCE,
+          NAMESPACES.NAVIGATION,
+          NAMESPACES.AUTH,
+        ] as readonly string[]
+      ).includes(required)
+    )
+      return;
+    if (this.negotiatedCapabilities.includes(required)) return;
 
     const key = `${namespace}.${action}`;
     if (this.warnedUnavailableCapabilities.has(key)) return;
     this.warnedUnavailableCapabilities.add(key);
     this.logger.warn(
-      `[dev] "${key}" requires the "${namespace}" capability, but the host did not negotiate it — the request will likely fail`,
+      `[dev] "${key}" requires the "${required}" capability, but the host did not negotiate it — the request will likely fail`,
     );
   }
 
@@ -736,6 +783,8 @@ export class RpcClient {
     payload?: unknown,
     options?: RpcStreamOptions,
   ): Promise<StreamBuilder> {
+    this.assertCapability(namespace, action);
+    this.warnOnUnavailableCapability(namespace, action);
     const message = createMessage(
       "request",
       namespace,
@@ -847,7 +896,7 @@ export class RpcClient {
   private notifyHostStreamCancelled(requestId: string): void {
     const record = this.streamConsumers.get(requestId);
     if (!record) return;
-    this.request<unknown>(record.namespace, ACTIONS.AI.CANCEL, {
+    this.request<unknown>(record.namespace, ACTIONS.HTTP.CANCEL, {
       requestId,
     }).catch((error: unknown) => {
       this.logger.warn(
