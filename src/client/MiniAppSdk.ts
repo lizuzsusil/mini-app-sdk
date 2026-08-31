@@ -21,6 +21,7 @@ import {
   createConfigModule,
   createDeviceModule,
   createFlagsModule,
+  createGicChatModule,
   createHttpModule,
   createLinksModule,
   createNavigationModule,
@@ -45,6 +46,7 @@ import type {
   Diagnostic,
   EventHandler,
   FlagsSdkModule,
+  GicChatSdkModule,
   HostDescriptor,
   HttpSdkModule,
   LinksSdkModule,
@@ -137,6 +139,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly appearance: AppearanceSdkModule;
   readonly notifications: NotificationsSdkModule;
   readonly links: LinksSdkModule;
+  readonly gicChat: GicChatSdkModule;
   readonly debug: SdkDebug;
 
   private readonly rpc: RpcClient;
@@ -213,6 +216,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.register(NAMESPACES.AI, createChatModule);
     this.registry.register(NAMESPACES.NOTIFICATIONS, createNotificationsModule);
     this.registry.register(NAMESPACES.LINKS, createLinksModule);
+    this.registry.register(NAMESPACES.GIC_CHAT, createGicChatModule);
     this.registry.build(this.rpc);
 
     this.auth = this.requireModule<AuthSdkModule>(NAMESPACES.AUTH);
@@ -235,6 +239,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       NAMESPACES.NOTIFICATIONS,
     );
     this.links = this.requireModule<LinksSdkModule>(NAMESPACES.LINKS);
+    this.gicChat = this.requireModule<GicChatSdkModule>(NAMESPACES.GIC_CHAT);
 
     const platformHandle = createPlatformModule("web");
     this.platform = platformHandle.module;

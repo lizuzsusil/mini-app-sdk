@@ -25,6 +25,7 @@ export const NAMESPACES = {
   EVENT: "event",
   HANDSHAKE: "handshake",
   HEARTBEAT: "heartbeat",
+  GIC_CHAT: "gic-chat",
 } as const;
 
 export type Namespace = (typeof NAMESPACES)[keyof typeof NAMESPACES];
@@ -51,6 +52,7 @@ export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.AI,
   NAMESPACES.NOTIFICATIONS,
   NAMESPACES.LINKS,
+  NAMESPACES.GIC_CHAT,
 ];
 
 /**
@@ -130,6 +132,10 @@ export const ACTIONS = {
   },
   LINKS: {
     OPEN: "open",
+  },
+  GIC_CHAT: {
+    START_SESSION: "startSession",
+    STREAM: "stream",
   },
   EVENT: {
     SUBSCRIBE: "subscribe",
