@@ -17,7 +17,6 @@ import {
   createApiModule,
   createAppearanceModule,
   createAuthModule,
-  createChatModule,
   createConfigModule,
   createDeviceModule,
   createFlagsModule,
@@ -40,7 +39,6 @@ import type {
   ApiSdkModule,
   AppearanceSdkModule,
   AuthSdkModule,
-  ChatSdkModule,
   ConfigSdkModule,
   DeviceSdkModuleWithGuards,
   Diagnostic,
@@ -131,11 +129,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly platform: PlatformSdkModule;
   readonly device: DeviceSdkModuleWithGuards;
   readonly http: HttpSdkModule;
-  readonly ai: ChatSdkModule;
-  /** Alias for `ai` — preferred name for the chat/AI module. */
-  get chat(): ChatSdkModule {
-    return this.ai;
-  }
   readonly appearance: AppearanceSdkModule;
   readonly notifications: NotificationsSdkModule;
   readonly links: LinksSdkModule;
@@ -213,7 +206,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.register(NAMESPACES.DEVICE, createDeviceModule);
     this.registry.register(NAMESPACES.API, createApiModule);
     this.registry.register(NAMESPACES.HTTP, createHttpModule);
-    this.registry.register(NAMESPACES.AI, createChatModule);
     this.registry.register(NAMESPACES.NOTIFICATIONS, createNotificationsModule);
     this.registry.register(NAMESPACES.LINKS, createLinksModule);
     this.registry.register(NAMESPACES.GIC_CHAT, createGicChatModule);
@@ -234,7 +226,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     );
     this.api = this.requireModule<ApiSdkModule>(NAMESPACES.API);
     this.http = this.requireModule<HttpSdkModule>(NAMESPACES.HTTP);
-    this.ai = this.requireModule<ChatSdkModule>(NAMESPACES.AI);
     this.notifications = this.requireModule<NotificationsSdkModule>(
       NAMESPACES.NOTIFICATIONS,
     );

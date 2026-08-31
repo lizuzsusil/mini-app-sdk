@@ -24,7 +24,6 @@ export const NAMESPACES = {
   EVENT: "event",
   HANDSHAKE: "handshake",
   HEARTBEAT: "heartbeat",
-  AI: "ai",
   GIC_CHAT: "gic-chat",
 } as const;
 
@@ -51,7 +50,6 @@ export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.APPEARANCE,
   NAMESPACES.NOTIFICATIONS,
   NAMESPACES.LINKS,
-  NAMESPACES.AI,
   NAMESPACES.GIC_CHAT,
 ];
 
@@ -115,8 +113,6 @@ export const ACTIONS = {
     /** File/binary streaming — keep as-is (Uint8Array) */
     GET_STREAM: "getStream",
     CANCEL: "cancel",
-    /** @deprecated alias — use GIC_CHAT.START_SESSION (HTTP capability gated) */
-    GIC_START_SESSION: "gicStartSession",
   },
   STORAGE: {
     GET: "get",
@@ -135,10 +131,6 @@ export const ACTIONS = {
   },
   LINKS: {
     OPEN: "open",
-  },
-  AI: {
-    CHAT: "chat",
-    CANCEL: "cancel",
   },
   GIC_CHAT: {
     START_SESSION: "startSession",

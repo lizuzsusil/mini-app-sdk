@@ -47,7 +47,6 @@ export {
 export type { ConsoleLoggerOptions, Logger } from "./logging";
 export { ConsoleLogger, NoopLogger } from "./logging";
 export type { AppearanceModuleHandle, ModuleFactory } from "./modules";
-export { ChatMessages } from "./modules";
 export type {
   ActionMetrics,
   DurationPercentiles,
@@ -97,7 +96,6 @@ export type {
   AuthSdkModule,
   ChatMessage,
   ChatRequestOptions,
-  ChatSdkModule,
   CircuitBreakerOptions,
   ConfigSdkModule,
   DeviceAction,

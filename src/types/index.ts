@@ -64,7 +64,7 @@ export type {
   ThemePreference,
   ThemeState,
 } from "@lizuz/mini-app-types";
-export type { ChatRequestOptions, ChatSdkModule } from "./chat.types";
+export type { ChatRequestOptions } from "./chat.types";
 export type {
   AppearanceType,
   OnEventOptions,
