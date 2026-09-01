@@ -11,7 +11,9 @@ import type { RpcClient } from "../rpc";
 /**
  * GIC Chat Agent module — session + SSE event streaming per `chat_api_spec.pdf`.
  *
- * - `startSession()` mirrors `POST /start-session` → `{user_id, session_id}`
+ * - `startSession()` — **mini-app initiated HTTP POST** to `{gicChatBaseUrl}/start-session`
+ *   (resolved via `config.get("gicChatBaseUrl")`, falling back to dedicated GIC RPC).
+ *   Host proxies the POST via its HTTP service; streaming then uses GIC_CHAT.STREAM.
  * - `stream()` mirrors `POST /stream` with `user_id/session_id/message` (≤200 chars)
  *   and streams back typed `GicChatEvent`s (`tool_call`, `tool_result`, `keep_alive`,
  *   `token{ text }`, `meta{ invocation_id }`, `done`, `error{ detail }`).
@@ -40,6 +42,44 @@ export function createGicChatModule(
 
   return {
     async startSession(): Promise<GicChatSession> {
+      // Mini-app initiated HTTP POST — resolve GIC base URL from host config, then POST via HTTP proxy
+      let viaHttp: GicChatSession | null = null;
+      try {
+        const baseUrl = await rpc
+          .request<string>(NAMESPACES.CONFIG, ACTIONS.CONFIG.GET, {
+            key: "gicChatBaseUrl",
+          } as unknown as Record<string, unknown>)
+          .catch(() => null);
+        const resolved =
+          typeof baseUrl === "string" && baseUrl.length > 0
+            ? baseUrl.replace(/\/$/, "")
+            : null;
+        if (resolved) {
+          const httpResult = await rpc.request<{
+            status: number;
+            data: GicChatSession & { detail?: string };
+            headers: Record<string, string>;
+          }>(NAMESPACES.HTTP, ACTIONS.HTTP.POST, {
+            endpoint: `${resolved}/start-session`,
+            body: {},
+            headers: { "Content-Type": "application/json" },
+          } as unknown as Record<string, unknown>);
+          const payload =
+            (httpResult as unknown as { data?: unknown })?.data ?? httpResult;
+          const candidate = payload as GicChatSession;
+          if (candidate?.user_id && candidate?.session_id) {
+            viaHttp = candidate;
+          } else if (
+            (payload as { user_id?: string; session_id?: string })?.user_id
+          ) {
+            viaHttp = payload as unknown as GicChatSession;
+          }
+        }
+      } catch {
+        // Fall through to dedicated GIC RPC
+      }
+      if (viaHttp) return viaHttp;
+
       const result = await rpc.request<GicChatSession>(
         NAMESPACES.GIC_CHAT,
         ACTIONS.GIC_CHAT.START_SESSION,
