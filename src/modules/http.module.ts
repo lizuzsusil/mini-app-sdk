@@ -116,5 +116,8 @@ export function createHttpModule(rpc: RpcClient): HttpSdkModule {
         ACTIONS.HTTP.CHAT_STREAM,
         params,
       ) as Promise<T>,
+
+    websocket: (params: HttpGetParams) =>
+      rpc.request<WebSocket>(NAMESPACES.HTTP, ACTIONS.HTTP.WEBSOCKET, params),
   };
 }

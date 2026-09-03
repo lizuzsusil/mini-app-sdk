@@ -12,8 +12,8 @@ importers:
         specifier: ^2.5.7
         version: 2.5.10
       '@lizuz/mini-app-types':
-        specifier: ^1.1.1
-        version: 1.1.1
+        specifier: ^1.1.2
+        version: 1.1.2
       esbuild:
         specifier: ^0.28.1
         version: 0.28.2
@@ -478,8 +478,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@lizuz/mini-app-types@1.1.1':
-    resolution: {integrity: sha512-dFU8qbNg7JtmsQhFESVrFiCjcBkXTJutjHLpcA5f8o1roTssXGfDqaAGjbNrCsfi0IiJ8mI7nkeoizQCAA5Jgw==}
+  '@lizuz/mini-app-types@1.1.2':
+    resolution: {integrity: sha512-TiujP5wrsCAylCidkVuA1oK8+XSLgdPAfnBDccKfDpeQF+LiTwB49t4WfVMGJOKInv32GObTQ9SpE93JWkZi3Q==}
 
   '@microsoft/api-extractor-model@7.33.11':
     resolution: {integrity: sha512-iDu1AtuRC2Z8XVs2SieZieVavF1FXPBX1C9pMexJh8Dx/Dd/3ZZ4nRQp/PU2Vk2rUHWuBz1wOyL4DcuhVnBXwg==}
@@ -1860,7 +1860,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@lizuz/mini-app-types@1.1.1': {}
+  '@lizuz/mini-app-types@1.1.2': {}
 
   '@microsoft/api-extractor-model@7.33.11':
     dependencies:

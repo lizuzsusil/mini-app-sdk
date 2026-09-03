@@ -112,6 +112,7 @@ export const ACTIONS = {
     STREAM: "chatStream",
     /** File/binary streaming — keep as-is (Uint8Array) */
     GET_STREAM: "getStream",
+    WEBSOCKET: "websocket",
     CANCEL: "cancel",
   },
   STORAGE: {

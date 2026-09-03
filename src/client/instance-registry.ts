@@ -23,8 +23,14 @@ function writeGlobal(instance: MiniAppSdk | null): void {
     const g = globalThis as unknown as Record<string, unknown>;
     if (instance) {
       g[GLOBAL_KEY] = instance;
-    } else if (g[GLOBAL_KEY] === instance) {
-      delete g[GLOBAL_KEY];
+    } else {
+      // Clear the global if it holds any SDK instance (including a destroyed one).
+      // The previous check `g[GLOBAL_KEY] === instance` compared against `null`
+      // and never deleted a destroyed instance left on the global, causing
+      // `readSdkInstance` to return a destroyed instance on the next open.
+      if (GLOBAL_KEY in g) {
+        delete g[GLOBAL_KEY];
+      }
     }
   } catch {
     // globalThis may be non-writable in some embedded runtimes — ignore.
@@ -72,4 +78,28 @@ export function getAllInstances(): readonly MiniAppSdk[] {
 export function clearInstances(): void {
   instances.clear();
   writeGlobal(null);
+  clearActiveInstance();
+}
+
+// ---------------------------------------------------------------------------
+// Module-scoped active instance (previously in src/index.ts) — moved here so
+// `MiniAppSdk.destroy()` can clear it. Delegates to the same map/global so
+// the CDN IIFE and helper trio share one backing store.
+// ---------------------------------------------------------------------------
+let activeInstance: MiniAppSdk | null = null;
+
+export function setActiveInstance(instance: MiniAppSdk | null): void {
+  activeInstance = instance;
+}
+
+export function getActiveInstance(): MiniAppSdk | null {
+  return activeInstance ?? getInstance() ?? null;
+}
+
+export function clearActiveInstance(): void {
+  activeInstance = null;
+}
+
+export function clearActiveInstanceIf(instance: MiniAppSdk): void {
+  if (activeInstance === instance) activeInstance = null;
 }

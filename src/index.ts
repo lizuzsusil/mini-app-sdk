@@ -183,19 +183,11 @@ export type {
 export { validateSdkOptions } from "./types/validate-options";
 
 import {
+  getActiveInstance as getRegistryActiveInstance,
   getInstance as getRegistryInstance,
   registerInstance as registerRegistryInstance,
+  setActiveInstance,
 } from "./client/instance-registry";
-
-/**
- * Module-scoped "active instance" used only by the `createMiniAppSdk` /
- * `getMiniAppSdk` / `initMiniAppSdk` convenience trio below, for
- * consumers who want a single implicit SDK instance instead of managing
- * their own reference. Delegates to the shared `instance-registry` so the
- * CDN IIFE (`src/cdn.ts`) and this helper share the same backing store
- * (see A2 in `future.md`).
- */
-let activeInstance: MiniAppSdk | null = null;
 
 /** Constructs a `MiniAppSdk` without initializing it. Call `.initialize()` yourself. */
 export function createMiniAppSdk(options: MiniAppSdkOptions): MiniAppSdk {
@@ -203,16 +195,17 @@ export function createMiniAppSdk(options: MiniAppSdkOptions): MiniAppSdk {
   // Register eagerly so `MiniAppSdk.getInstance()` and `window.__GSA_SDK__`
   // reflect the instance even before `initialize()` (mirrors CDN behavior).
   registerRegistryInstance(sdk);
-  activeInstance = sdk;
+  setActiveInstance(sdk);
   return sdk;
 }
 
 /** Returns the instance created by the most recent `initMiniAppSdk()` call. */
 export function getMiniAppSdk(): MiniAppSdk {
-  if (activeInstance) return activeInstance;
+  const active = getRegistryActiveInstance();
+  if (active) return active;
   const fromRegistry = getRegistryInstance();
   if (fromRegistry) {
-    activeInstance = fromRegistry;
+    setActiveInstance(fromRegistry);
     return fromRegistry;
   }
   throw new SdkError({
@@ -228,7 +221,7 @@ export async function initMiniAppSdk(
   const sdk = new MiniAppSdk(options);
   await sdk.initialize();
   registerRegistryInstance(sdk);
-  activeInstance = sdk;
+  setActiveInstance(sdk);
   return sdk;
 }
 
@@ -238,5 +231,5 @@ export async function initMiniAppSdk(
  * @deprecated Use `MiniAppSdk.getInstance()` or `getInstance()` from `instance-registry`.
  */
 export function getActiveInstance(): MiniAppSdk | null {
-  return activeInstance ?? getRegistryInstance() ?? null;
+  return getRegistryActiveInstance();
 }

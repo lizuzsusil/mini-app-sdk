@@ -68,6 +68,7 @@ import type {
 import { validateSdkOptions } from "../types/validate-options";
 import { delay } from "../utils";
 import {
+  clearActiveInstanceIf,
   getInstance as getRegistryInstance,
   registerInstance,
   unregisterInstance,
@@ -525,6 +526,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.initialized = false;
     this.destroyed = true;
     unregisterInstance(this);
+    clearActiveInstanceIf(this);
     this.logger.info(`MiniAppSdk("${this.miniAppId}") destroyed`);
   }
 
