@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { ACTIONS, NAMESPACES } from "../constants";
+import { ACTIONS, HTTP_EVENTS, NAMESPACES } from "../constants";
 import type { RpcClient } from "../rpc";
 import { StreamBuilder } from "../stream";
-import { createApiModule, DEFAULT_CHAT_CHANNEL } from "./api.module";
+import { createApiModule } from "./api.module";
 
 function makeModule() {
   const request = vi.fn(
@@ -14,116 +14,203 @@ function makeModule() {
     ) => ({ status: 200, data: {}, headers: {} }),
   );
   const sendStreamRequest = vi.fn(
-    async (_namespace: string, _action: string, _payload?: unknown) =>
-      new StreamBuilder(),
+    async (
+      _namespace: string,
+      _action: string,
+      _payload?: unknown,
+      _options?: unknown,
+    ) => new StreamBuilder(),
   );
-  const rpc = { request, sendStreamRequest } as unknown as RpcClient;
-  return { rpc, request, sendStreamRequest, module: createApiModule(rpc) };
+  const onEvent = vi.fn(
+    (_event: string, _handler: (payload: unknown) => void) => () => {},
+  );
+  const rpc = { request, sendStreamRequest, onEvent } as unknown as RpcClient;
+  return { rpc, request, sendStreamRequest, onEvent, module: createApiModule(rpc) };
 }
 
 describe("api module", () => {
-  it("routes unary methods through rpc.request unchanged", async () => {
+  it("defaults to POST for calls without a method", async () => {
     const { request, sendStreamRequest, module } = makeModule();
 
-    await module.request({ method: "POST", body: { method: "POST", path: "/api/mock/session" } });
+    await module.request("POST", { body: { action: "session.start" } });
 
     expect(request).toHaveBeenCalledWith(NAMESPACES.API, ACTIONS.API.REQUEST, {
       method: "POST",
-      body: { method: "POST", path: "/api/mock/session" },
+      body: { action: "session.start" },
     });
     expect(sendStreamRequest).not.toHaveBeenCalled();
   });
 
-  it("routes STREAM through sendStreamRequest on the same api.request action", async () => {
-    const { sendStreamRequest, module } = makeModule();
+  it("defaults a missing method to POST", async () => {
+    const { request, module } = makeModule();
 
-    await module.request({
-      method: "STREAM",
-      body: { channel: "gic", user_id: "u1", session_id: "s1", message: "hi" },
-    } as unknown as Parameters<typeof module.request>[0]);
+    await module.request(undefined, { body: { hello: "world" } });
 
-    expect(sendStreamRequest).toHaveBeenCalledWith(
-      NAMESPACES.API,
-      ACTIONS.API.REQUEST,
-      {
-        method: "STREAM",
-        body: { channel: "gic", user_id: "u1", session_id: "s1", message: "hi" },
-      },
-      undefined,
-    );
+    expect(request).toHaveBeenCalledWith(NAMESPACES.API, ACTIONS.API.REQUEST, {
+      method: "POST",
+      body: { hello: "world" },
+    });
   });
 
-  it("defaults a missing channel to generic", async () => {
-    const { sendStreamRequest, module } = makeModule();
-    expect(DEFAULT_CHAT_CHANNEL).toBe("generic");
+  it("forwards endpoint/query/headers for proxied file calls", async () => {
+    const { request, module } = makeModule();
 
-    await module.request({
-      method: "STREAM",
+    await module.request("GET", {
+      endpoint: "https://files.example/dl",
+      query: { id: "1" },
+      headers: { Accept: "application/octet-stream" },
+    });
+
+    expect(request).toHaveBeenCalledWith(NAMESPACES.API, ACTIONS.API.REQUEST, {
+      method: "GET",
+      endpoint: "https://files.example/dl",
+      query: { id: "1" },
+      headers: { Accept: "application/octet-stream" },
+    });
+  });
+
+  it("routes stream:true through sendStreamRequest on the same api.request action", async () => {
+    const { request, sendStreamRequest, module } = makeModule();
+
+    await module.request("POST", {
       body: { messages: [{ role: "user", content: "hello" }] },
-    } as unknown as Parameters<typeof module.request>[0]);
+      stream: true,
+    });
 
+    expect(request).not.toHaveBeenCalled();
     expect(sendStreamRequest).toHaveBeenCalledWith(
       NAMESPACES.API,
       ACTIONS.API.REQUEST,
       {
-        method: "STREAM",
-        body: { messages: [{ role: "user", content: "hello" }], channel: "generic" },
+        method: "POST",
+        body: { messages: [{ role: "user", content: "hello" }] },
+        stream: true,
       },
       undefined,
     );
   });
 
-  it("falls back to gic on GIC-shaped bodies without a channel", async () => {
+  it("streams file downloads via endpoint + stream:true", async () => {
     const { sendStreamRequest, module } = makeModule();
 
-    await module.request({
-      method: "STREAM",
-      body: { user_id: "u1", session_id: "s1", message: "hi" },
-    } as unknown as Parameters<typeof module.request>[0]);
+    await module.request("GET", {
+      endpoint: "https://files.example/dl",
+      stream: true,
+    });
 
-    const payload = sendStreamRequest.mock.calls[0]![2] as { body: { channel: string } };
-    expect(payload.body.channel).toBe("gic");
+    expect(sendStreamRequest).toHaveBeenCalledWith(
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
+      {
+        method: "GET",
+        endpoint: "https://files.example/dl",
+        stream: true,
+      },
+      undefined,
+    );
   });
 
-  it("forwards the stream AbortSignal", async () => {
+  it("passes no body-specific validation — bodies stay opaque", async () => {
+    const { sendStreamRequest, module } = makeModule();
+
+    await expect(
+      module.request("POST", { body: { whatever: 1 }, stream: true }),
+    ).resolves.toBeDefined();
+    expect(sendStreamRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards the AbortSignal for streams", async () => {
     const { sendStreamRequest, module } = makeModule();
     const controller = new AbortController();
 
-    await module.request({
-      method: "STREAM",
-      body: { messages: [{ role: "user", content: "hello" }] },
-      stream: { signal: controller.signal },
-    } as unknown as Parameters<typeof module.request>[0]);
+    await module.request("POST", {
+      body: { messages: [] },
+      stream: true,
+      signal: controller.signal,
+    });
 
     expect(sendStreamRequest).toHaveBeenCalledWith(
       NAMESPACES.API,
       ACTIONS.API.REQUEST,
-      expect.objectContaining({ method: "STREAM" }),
+      expect.objectContaining({ stream: true }),
       { signal: controller.signal },
     );
   });
 
-  it("rejects blank gic messages with INVALID_PARAMS", async () => {
+  it("remaps legacy method:STREAM to stream:true", async () => {
     const { sendStreamRequest, module } = makeModule();
 
+    await module.request("STREAM", {
+      body: { messages: [{ role: "user", content: "hello" }] },
+    });
+
+    expect(sendStreamRequest).toHaveBeenCalledWith(
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
+      {
+        method: "POST",
+        body: { messages: [{ role: "user", content: "hello" }] },
+        stream: true,
+      },
+      undefined,
+    );
+  });
+
+  it("remaps legacy stream:{ signal } to a stream", async () => {
+    const { sendStreamRequest, module } = makeModule();
+    const controller = new AbortController();
+
+    await (module.request as unknown as (method: string, params: unknown) => Promise<unknown>)(
+      "POST",
+      {
+        body: { messages: [{ role: "user", content: "hello" }] },
+        stream: { signal: controller.signal },
+      },
+    );
+
+    expect(sendStreamRequest).toHaveBeenCalledWith(
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
+      expect.objectContaining({ stream: true }),
+      { signal: controller.signal },
+    );
+  });
+
+  it("rejects the removed object form with INVALID_PARAMS", async () => {
+    const { request, sendStreamRequest, module } = makeModule();
+
     await expect(
-      module.request({
-        method: "STREAM",
-        body: { channel: "gic", user_id: "u1", session_id: "s1", message: "  " },
-      } as unknown as Parameters<typeof module.request>[0]),
+      (module.request as unknown as (params: unknown) => Promise<unknown>)({
+        method: "POST",
+        body: { hello: "world" },
+      }),
     ).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+    expect(request).not.toHaveBeenCalled();
     expect(sendStreamRequest).not.toHaveBeenCalled();
   });
 
-  it("rejects empty generic message lists with INVALID_PARAMS", async () => {
-    const { sendStreamRequest, module } = makeModule();
+  it("subscribes to upload progress and unsubscribes once the request settles", async () => {
+    const { onEvent, module } = makeModule();
+    const unsubscribe = vi.fn();
+    onEvent.mockReturnValue(unsubscribe);
+    const onProgress = vi.fn();
 
-    await expect(
-      module.request({
-        method: "STREAM",
-        body: { messages: [] },
-      } as unknown as Parameters<typeof module.request>[0]),
-    ).rejects.toMatchObject({ code: "INVALID_PARAMS" });
-    expect(sendStreamRequest).not.toHaveBeenCalled();
+    await module.request("POST", {
+      endpoint: "https://files.example/up",
+      body: "payload",
+      onProgress,
+    });
+
+    expect(onEvent).toHaveBeenCalledWith(
+      HTTP_EVENTS.UPLOAD_PROGRESS,
+      expect.any(Function),
+    );
+    const handler = onEvent.mock.calls[0]![1] as (p: unknown) => void;
+    handler({ uploadedBytes: 10, totalBytes: 100 });
+    expect(onProgress).toHaveBeenCalledWith({
+      uploadedBytes: 10,
+      totalBytes: 100,
+    });
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });

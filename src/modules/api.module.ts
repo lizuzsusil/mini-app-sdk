@@ -1,107 +1,109 @@
-import { ACTIONS, NAMESPACES } from "../constants";
+import { ACTIONS, HTTP_EVENTS, NAMESPACES } from "../constants";
 import { SdkError } from "../errors";
 import type { RpcClient } from "../rpc";
-import type { ApiRequestParams, ApiResult, ApiSdkModule } from "../types";
+import type {
+  ApiRequestParams,
+  ApiResult,
+  ApiSdkModule,
+  ApiUploadProgress,
+} from "../types";
 
-export const DEFAULT_CHAT_CHANNEL = "generic" as const;
-export type ChatChannel = "generic" | "gic";
+export const DEFAULT_API_METHOD = "POST" as const;
 
-function resolveChannel(body: unknown): ChatChannel {
-  const channel = (body as { channel?: unknown } | null)?.channel;
-  if (channel === "gic" || channel === "generic") return channel;
-
-  const b = (body ?? {}) as Record<string, unknown>;
-  if (
-    typeof b.message === "string" &&
-    (typeof b.user_id === "string" || typeof b.session_id === "string")
-  ) {
-    return "gic";
-  }
-  return DEFAULT_CHAT_CHANNEL;
-}
-
-function validateStreamBody(body: unknown): void {
-  const b = (body ?? {}) as Record<string, unknown>;
-  if (
-    typeof b.message === "string" ||
-    b.user_id !== undefined ||
-    b.session_id !== undefined
-  ) {
-    if (typeof b.user_id !== "string" || !b.user_id) {
-      throw new SdkError({
-        code: "INVALID_PARAMS",
-        message: "user_id required for gic streams",
-      });
-    }
-    if (typeof b.session_id !== "string" || !b.session_id) {
-      throw new SdkError({
-        code: "INVALID_PARAMS",
-        message: "session_id required for gic streams",
-      });
-    }
-    if (typeof b.message !== "string" || b.message.trim().length === 0) {
-      throw new SdkError({
-        code: "INVALID_PARAMS",
-        message: "message must be non-blank string",
-      });
-    }
-    if (b.message.length > 200) {
-      throw new SdkError({
-        code: "INVALID_PARAMS",
-        message: "message must be ≤200 characters",
-      });
-    }
-    return;
-  }
-  const messages = b.messages as unknown;
-  if (!Array.isArray(messages) || messages.length === 0) {
-    throw new SdkError({
-      code: "INVALID_PARAMS",
-      message: "messages must be a non-empty array",
-    });
-  }
-}
-
+/**
+ * Generic `api.request` — the single entry point for unary + streaming.
+ *
+ * Only the positional form is supported: `request("POST", { ... })`.
+ * - `method` defaults to `POST`; `stream` defaults to `false` (unary).
+ * - `stream: true` opens a live stream via `rpc.sendStreamRequest` — chat SSE
+ *   text and file/binary bytes share this path; the mini app interprets the
+ *   chunks. Init is just a unary call (no extra flag).
+ * - `endpoint`/`query` ride along for proxied file calls; endpoint-free
+ *   bodies stay opaque — no per-mini-app validation lives here.
+ * - Legacy `method: "STREAM"` (and `stream: { signal }`) from older bundles
+ *   is remapped to `stream: true` so they keep working.
+ */
 export function createApiModule(rpc: RpcClient): ApiSdkModule {
-  return {
-    request: (async <T = unknown, B = unknown>(
-      params?: ApiRequestParams<B>,
-    ) => {
-      const raw = params as unknown as
-        | {
-            method?: string;
-            body?: unknown;
-            headers?: Record<string, string>;
-            stream?: { signal?: AbortSignal };
-          }
-        | undefined;
-      const method = raw?.method ?? "POST";
-
-      if (method === "STREAM") {
-        validateStreamBody(raw?.body);
-        const channel = resolveChannel(raw?.body);
-        return rpc.sendStreamRequest(
-          NAMESPACES.API,
-          ACTIONS.API.REQUEST,
-          {
-            method,
-            body: {
-              ...((raw?.body ?? {}) as Record<string, unknown>),
-              channel,
-            },
-            ...(raw?.headers !== undefined && { headers: raw.headers }),
-          },
-          raw?.stream?.signal ? { signal: raw.stream.signal } : undefined,
-        ) as unknown as Promise<ApiResult<T>>;
-      }
-
-      const body = params?.body;
-      const headers = params?.headers;
-      return rpc.request<ApiResult<T>>(NAMESPACES.API, ACTIONS.API.REQUEST, {
-        method,
-        ...(body !== undefined && { body }),
-        ...(headers !== undefined && { headers }),
+  const run = async <T = unknown>(
+    method: string = DEFAULT_API_METHOD,
+    params: ApiRequestParams<unknown> = {},
+  ): Promise<ApiResult<T> | unknown> => {
+    if (typeof method !== "string") {
+      throw new SdkError({
+        code: "INVALID_PARAMS",
+        message:
+          'Use request("POST", { ... }) — the object form is no longer supported.',
       });
-    }) as ApiSdkModule["request"],
+    }
+
+    let stream = false;
+    let signal = params.signal;
+    const streamOpt = params.stream;
+    if (streamOpt !== undefined && streamOpt !== null) {
+      if (typeof streamOpt === "object") {
+        // Deprecated legacy shape `stream: { signal }`.
+        stream = true;
+        signal = streamOpt.signal ?? signal;
+      } else {
+        stream = streamOpt === true;
+      }
+    }
+
+    let resolvedMethod = (method ?? DEFAULT_API_METHOD).toUpperCase();
+    if (resolvedMethod === "STREAM") {
+      // Deprecated legacy sentinel — streaming is `stream: true` now.
+      resolvedMethod = DEFAULT_API_METHOD;
+      stream = true;
+    }
+
+    const payload: Record<string, unknown> = { method: resolvedMethod };
+    if (params.endpoint !== undefined) payload.endpoint = params.endpoint;
+    if (params.query !== undefined) payload.query = params.query;
+    if (params.body !== undefined) payload.body = params.body;
+    if (params.headers !== undefined) payload.headers = params.headers;
+
+    const withProgress = <R>(task: () => Promise<R>): Promise<R> => {
+      const onProgress = params.onProgress;
+      if (!onProgress) return task();
+      const unsubscribe = rpc.onEvent<ApiUploadProgress>(
+        HTTP_EVENTS.UPLOAD_PROGRESS,
+        (progress) => {
+          onProgress(progress);
+        },
+      );
+      const done = (): void => {
+        unsubscribe?.();
+      };
+      return task().then(
+        (value) => {
+          done();
+          return value;
+        },
+        (error: unknown) => {
+          done();
+          throw error;
+        },
+      );
+    };
+
+    if (!stream) {
+      return withProgress(() =>
+        rpc.request<ApiResult<T>>(NAMESPACES.API, ACTIONS.API.REQUEST, payload),
+      );
+    }
+
+    const builder = await withProgress(() =>
+      rpc.sendStreamRequest(
+        NAMESPACES.API,
+        ACTIONS.API.REQUEST,
+        { ...payload, stream: true },
+        signal ? { signal } : undefined,
+      ),
+    );
+    return builder as unknown;
+  };
+
+  return {
+    request: run as ApiSdkModule["request"],
   };
 }

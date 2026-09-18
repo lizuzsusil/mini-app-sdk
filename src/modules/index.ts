@@ -10,8 +10,6 @@ export { createAuthModule } from "./auth.module";
 export { createConfigModule } from "./config.module";
 export { createDeviceModule } from "./device.module";
 export { createFlagsModule } from "./flags.module";
-export { createGicChatModule } from "./gic-chat.module";
-export { createHttpModule } from "./http.module";
 export { createLinksModule } from "./links.module";
 export type { ModuleFactory } from "./module-registry";
 export { ModuleRegistry } from "./module-registry";

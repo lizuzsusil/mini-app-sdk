@@ -4,10 +4,8 @@
  * it — has to repeat the typo; the original spelling is kept alongside so
  * code already written against the types package still compiles.
  */
+
 export type {
-  ApiRequestParams,
-  ApiResult,
-  ApiSdkModule,
   AppearanceSdkModule,
   AppearanceState,
   AuthSdkModule,
@@ -35,8 +33,6 @@ export type {
   EventHandler,
   FlagsSdkModule,
   HostDescriptor,
-  HttpMethod,
-  HttpSdkModule,
   LinksOpenedEvent,
   LinksOpenOptions,
   LinksSdkModule,
@@ -64,6 +60,13 @@ export type {
   ThemePreference,
   ThemeState,
 } from "@lizuz/mini-app-types";
+export type {
+  ApiRequestMethod,
+  ApiRequestParams,
+  ApiResult,
+  ApiSdkModule,
+  ApiUploadProgress,
+} from "./api.types";
 export type { ChatRequestOptions } from "./chat.types";
 export type {
   AppearanceType,
@@ -77,30 +80,10 @@ export type {
   DeviceSdkModuleWithGuards,
 } from "./device.types";
 export type {
-  Headers,
-  HttpBodyRequest,
-  HttpDeleteParams,
-  HttpGetParams,
-  HttpPatchParams,
-  HttpPostParams,
-  HttpProgress,
-  HttpPutParams,
-  HttpQueryRequest,
-  HttpRequestBase,
-  HttpResult,
-  HttpUploadOptions,
-  Query,
-} from "./http.types";
-export type {
   AdaptiveTimeoutOptions,
   CircuitBreakerOptions,
   Diagnostic,
   DiagnosticSeverity,
-  GicChatEvent,
-  GicChatSdkModule,
-  GicChatSession,
-  GicChatStreamOptions,
-  GicChatStreamRequest,
   HeartbeatOptions,
   MiniAppSdkInterface,
   MiniAppSdkOptions,

@@ -20,8 +20,6 @@ import {
   createConfigModule,
   createDeviceModule,
   createFlagsModule,
-  createGicChatModule,
-  createHttpModule,
   createLinksModule,
   createNavigationModule,
   createNotificationsModule,
@@ -36,6 +34,8 @@ import { RpcClient } from "../rpc";
 import type { Transport } from "../transport";
 import { DefaultTransport } from "../transport";
 import type {
+  ApiRequestParams,
+  ApiResult,
   ApiSdkModule,
   AppearanceSdkModule,
   AuthSdkModule,
@@ -44,9 +44,7 @@ import type {
   Diagnostic,
   EventHandler,
   FlagsSdkModule,
-  GicChatSdkModule,
   HostDescriptor,
-  HttpSdkModule,
   LinksSdkModule,
   MiniAppSdkInterface,
   MiniAppSdkOptions,
@@ -110,7 +108,7 @@ const APPEARANCE_HYDRATION_BUDGET_MS = 1200;
  * string or a `.request()` call directly in this file, it almost certainly
  * belongs in a module file instead.
  */
-export type { SdkPlugin } from "@lizuz/mini-app-types";
+export type { SdkPlugin } from "../types";
 
 export class MiniAppSdk implements MiniAppSdkInterface {
   readonly miniAppId: string;
@@ -128,11 +126,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly storage: StorageSdkModule;
   readonly platform: PlatformSdkModule;
   readonly device: DeviceSdkModuleWithGuards;
-  readonly http: HttpSdkModule;
   readonly appearance: AppearanceSdkModule;
   readonly notifications: NotificationsSdkModule;
   readonly links: LinksSdkModule;
-  readonly gicChat: GicChatSdkModule;
   readonly debug: SdkDebug;
 
   private readonly rpc: RpcClient;
@@ -205,10 +201,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.registry.register(NAMESPACES.STORAGE, createStorageModule);
     this.registry.register(NAMESPACES.DEVICE, createDeviceModule);
     this.registry.register(NAMESPACES.API, createApiModule);
-    this.registry.register(NAMESPACES.HTTP, createHttpModule);
     this.registry.register(NAMESPACES.NOTIFICATIONS, createNotificationsModule);
     this.registry.register(NAMESPACES.LINKS, createLinksModule);
-    this.registry.register(NAMESPACES.GIC_CHAT, createGicChatModule);
     this.registry.build(this.rpc);
 
     this.auth = this.requireModule<AuthSdkModule>(NAMESPACES.AUTH);
@@ -225,12 +219,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       NAMESPACES.DEVICE,
     );
     this.api = this.requireModule<ApiSdkModule>(NAMESPACES.API);
-    this.http = this.requireModule<HttpSdkModule>(NAMESPACES.HTTP);
     this.notifications = this.requireModule<NotificationsSdkModule>(
       NAMESPACES.NOTIFICATIONS,
     );
     this.links = this.requireModule<LinksSdkModule>(NAMESPACES.LINKS);
-    this.gicChat = this.requireModule<GicChatSdkModule>(NAMESPACES.GIC_CHAT);
 
     const platformHandle = createPlatformModule("web");
     this.platform = platformHandle.module;
@@ -238,6 +230,12 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
     this.appearanceHandle = createAppearanceModule(this.rpc);
     this.appearance = this.appearanceHandle.module;
+
+    // `request`/`requestSafe` read instance state (`this.api`, `this.rpc`),
+    // so bind them — a destructured reference (e.g. `const { request } = sdk`)
+    // must keep working.
+    this.request = this.request.bind(this);
+    this.requestSafe = this.requestSafe.bind(this);
 
     this.debug = {
       snapshot: (): SdkDebugSnapshot => ({
@@ -671,14 +669,54 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     };
   }
 
-  /** {@inheritdoc} */
+  /**
+   * Generic request shorthand — `sdk.request("POST", { ... })` delegates to
+   * the `api` module (unary by default, `stream: true` for live streams).
+   * `sdk.api.request(...)` remains as an equivalent alias.
+   */
+  request<T = unknown, B = unknown>(
+    method: string,
+    params: ApiRequestParams<B> & { stream: true },
+  ): Promise<T>;
+  request<T = unknown, B = unknown>(
+    method?: string,
+    params?: ApiRequestParams<B>,
+  ): Promise<ApiResult<T>>;
+  /** Raw RPC — `request(namespace, action, payload?, options?)`. */
   request<T>(
     namespace: string,
     action: string,
     payload?: unknown,
     options?: RpcRequestOptions,
-  ): Promise<T> {
-    return this.rpc.request<T>(namespace, action, payload, options);
+  ): Promise<T>;
+  async request(
+    methodOrNamespace?: string,
+    actionOrParams?: string | ApiRequestParams<unknown>,
+    payload?: unknown,
+    options?: RpcRequestOptions,
+  ): Promise<unknown> {
+    if (
+      methodOrNamespace !== undefined &&
+      typeof methodOrNamespace !== "string"
+    ) {
+      throw new SdkError({
+        code: "INVALID_PARAMS",
+        message:
+          'Use sdk.request("POST", { ... }) — the object form is no longer supported.',
+      });
+    }
+    if (typeof actionOrParams === "string") {
+      return this.rpc.request(
+        methodOrNamespace as string,
+        actionOrParams,
+        payload,
+        options,
+      );
+    }
+    return (this.api.request as ApiSdkModule["request"])(
+      methodOrNamespace as string,
+      (actionOrParams ?? {}) as ApiRequestParams<unknown>,
+    ) as Promise<unknown>;
   }
 
   async requestSafe<T>(

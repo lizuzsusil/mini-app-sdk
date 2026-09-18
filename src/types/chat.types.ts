@@ -1,4 +1,4 @@
-/** Per-call control knobs for `http.stream()` (generic chat via HTTP.CHAT_STREAM), currently just cancellation. */
+/** Per-call control knobs for `api.request({ stream: true })`, currently just cancellation. */
 export interface ChatRequestOptions {
   /**
    * When provided, aborting the signal cancels the stream (rejecting the

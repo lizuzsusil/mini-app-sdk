@@ -17,14 +17,12 @@ export const NAMESPACES = {
   DEVICE: "device",
   API: "api",
   STORAGE: "storage",
-  HTTP: "http",
   APPEARANCE: "appearance",
   NOTIFICATIONS: "notifications",
   LINKS: "links",
   EVENT: "event",
   HANDSHAKE: "handshake",
   HEARTBEAT: "heartbeat",
-  GIC_CHAT: "gic-chat",
 } as const;
 
 export type Namespace = (typeof NAMESPACES)[keyof typeof NAMESPACES];
@@ -46,11 +44,9 @@ export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.DEVICE,
   NAMESPACES.STORAGE,
   NAMESPACES.API,
-  NAMESPACES.HTTP,
   NAMESPACES.APPEARANCE,
   NAMESPACES.NOTIFICATIONS,
   NAMESPACES.LINKS,
-  NAMESPACES.GIC_CHAT,
 ];
 
 /**
@@ -100,20 +96,6 @@ export const ACTIONS = {
     HAPTICS: "haptics",
     REVIEW: "review",
   },
-  HTTP: {
-    GET: "get",
-    POST: "post",
-    PUT: "put",
-    PATCH: "patch",
-    DELETE: "delete",
-    /** Generic chat streaming — CHAT_STREAM is the new name for the old STREAM; both mean the same. File streaming stays GET_STREAM. */
-    CHAT_STREAM: "chatStream",
-    /** @deprecated alias — use CHAT_STREAM */
-    STREAM: "chatStream",
-    /** File/binary streaming — keep as-is (Uint8Array) */
-    GET_STREAM: "getStream",
-    CANCEL: "cancel",
-  },
   STORAGE: {
     GET: "get",
     SET: "set",
@@ -121,6 +103,8 @@ export const ACTIONS = {
   },
   API: {
     REQUEST: "request",
+    /** Stream cancellation — SDK notifies via `<namespace>.cancel` when a stream is cancelled. */
+    CANCEL: "cancel",
   },
   APPEARANCE: {
     GET_LOCALE: "getLocale",
@@ -131,10 +115,6 @@ export const ACTIONS = {
   },
   LINKS: {
     OPEN: "open",
-  },
-  GIC_CHAT: {
-    START_SESSION: "startSession",
-    STREAM: "stream",
   },
   EVENT: {
     SUBSCRIBE: "subscribe",
@@ -178,13 +158,13 @@ export const CONNECTION_EVENTS = {
 } as const;
 
 /**
- * HTTP events on the wire. `UPLOAD_PROGRESS` (host → mini app) is how the
- * host reports bytes-sent for an in-flight upload; `HttpSdkModule` mirrors
- * it onto `HttpUploadOptions.onProgress`, and mini apps can also subscribe
- * directly with `sdk.on("http.uploadProgress", …)`.
+ * Upload-progress events on the wire. `UPLOAD_PROGRESS` (host → mini app)
+ * is how the host reports bytes-sent for an in-flight upload;
+ * `api.request` mirrors it onto `onProgress`, and mini apps can also
+ * subscribe directly with `sdk.on("api.uploadProgress", …)`.
  */
 export const HTTP_EVENTS = {
-  UPLOAD_PROGRESS: "http.uploadProgress",
+  UPLOAD_PROGRESS: "api.uploadProgress",
 } as const;
 
 /**

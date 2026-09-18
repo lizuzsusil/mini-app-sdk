@@ -2,13 +2,25 @@ import type { StreamChunk } from "@lizuz/mini-app-types";
 import { StreamCancelledError } from "../errors";
 
 /**
- * Accumulates the chunks of an in-flight streamed response and hands the
- * assembled result to consumers via a promise and an async iterator.
+ * Accumulates the chunks of an in-flight streamed response and hands them
+ * to consumers via a promise and a live async iterator.
  *
  * Lifecycle: the `RpcClient` registers a `StreamBuilder` per streamed
  * request, feeds it one `StreamChunk` per inbound `stream` message, and the
  * builder resolves once the host flags the final chunk (`last: true`) or
  * rejects if the host reports an error / the stream times out.
+ *
+ * `iterate()` yields each chunk as it arrives (in index order, so an
+ * out-of-order delivery still reads sequentially) — consumers render
+ * progressively. A consumer that starts after completion replays the
+ * assembled chunks. Retransmissions of an already-yielded index are
+ * dropped for live consumers; late consumers see the latest value per
+ * index.
+ *
+ * Failure semantics: the iterator never throws. If the stream fails before
+ * a consumer yields anything, it yields nothing (buffered chunks are
+ * considered untrustworthy); chunks already yielded stay yielded. Terminal
+ * failures surface via `waitUntilDone()`.
  *
  * This class is intentionally transport-agnostic: it holds no reference to
  * `RpcClient`, `Transport`, or the wire format — chunks in, result out.
@@ -39,14 +51,23 @@ export class StreamBuilder {
   private resolve?: (chunks: (Uint8Array | string)[]) => void;
   private reject?: (err: Error) => void;
 
-  /**
-   * A never-rejecting mirror of `promise`, so consumers that only want the
-   * chunks produced before a failure (`iterate`) don't have to catch.
-   */
-  private readonly settledPromise = this.promise.catch(() => {
-    this.rejected = true;
-    return [];
-  });
+  /** Wakers for live `iterate()` consumers waiting on the next chunk. */
+  private readonly progressWaiters = new Set<() => void>();
+
+  private notifyProgress(): void {
+    if (this.progressWaiters.size === 0) return;
+    const waiters = [...this.progressWaiters];
+    this.progressWaiters.clear();
+    for (const wake of waiters) wake();
+  }
+
+  private waitForProgress(): Promise<void> {
+    // Synchronous subscribe: callers check state first without awaiting in
+    // between, so no arrival can slip through before this registers.
+    return new Promise<void>((resolve) => {
+      this.progressWaiters.add(resolve);
+    });
+  }
 
   /** Resolves when the stream completes, or rejects if it fails mid-stream. */
   waitUntilDone(): Promise<void> {
@@ -74,6 +95,7 @@ export class StreamBuilder {
       this.resolved = true;
       this.resolve?.([...this.chunks.values()]);
     }
+    this.notifyProgress();
   }
 
   /** True once the final chunk has been received. */
@@ -102,17 +124,43 @@ export class StreamBuilder {
   }
 
   /**
-   * Yields every chunk received so far once the stream settles. After a
-   * failure this yields nothing (the chunks already buffered before the
-   * failure are considered untrustworthy — a mid-stream failure means the
-   * response may be incomplete).
+   * Yields each chunk live as it arrives, in index order. A consumer that
+   * starts after completion replays the assembled chunks (latest value per
+   * index). Never throws: on failure it simply stops, yielding nothing
+   * further — terminal failures surface via `waitUntilDone()`.
    */
   async *iterate(): AsyncIterableIterator<string | Uint8Array> {
-    if (this.rejected) return;
-    const result = await this.settledPromise;
-    if (this.rejected) return;
-    for (const chunk of result) {
-      yield chunk;
+    const yielded = new Set<number>();
+    let cursor: number | null = null;
+    for (;;) {
+      if (this.rejected) return;
+      if (cursor === null) {
+        if (this.chunks.size === 0) {
+          if (this.resolved) return;
+          await this.waitForProgress();
+          continue;
+        }
+        cursor = Math.min(...this.chunks.keys());
+      }
+      // Skip retransmissions of already-yielded indices.
+      while (yielded.has(cursor) && this.chunks.has(cursor)) cursor++;
+      const data = this.chunks.get(cursor);
+      if (data === undefined) {
+        if (this.resolved) {
+          // Done with gaps unfilled — replay leftovers in index order.
+          const rest = [...this.chunks.keys()]
+            .filter((k) => !yielded.has(k))
+            .sort((a, b) => a - b);
+          if (rest.length === 0) return;
+          cursor = rest[0] as number;
+          continue;
+        }
+        await this.waitForProgress();
+        continue;
+      }
+      yielded.add(cursor);
+      yield data;
+      cursor++;
     }
   }
 
@@ -121,6 +169,11 @@ export class StreamBuilder {
     if (this.rejected || this.resolved) return;
     this.rejected = true;
     this.reject?.(err);
+    // The internal promise may have no `waitUntilDone()` consumer —
+    // suppress unhandled-rejection noise (state stays observable via
+    // `isRejected`, and the live iterator simply stops).
+    void this.promise.catch(() => undefined);
+    this.notifyProgress();
   }
 
   /**
@@ -134,6 +187,8 @@ export class StreamBuilder {
     this.rejected = true;
     this.onCancelCallback?.();
     this.reject?.(error ?? new StreamCancelledError());
+    void this.promise.catch(() => undefined);
+    this.notifyProgress();
   }
 
   /**

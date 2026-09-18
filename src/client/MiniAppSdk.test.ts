@@ -156,6 +156,69 @@ describe("MiniAppSdk", () => {
     await expect(userPromise).resolves.toMatchObject({ id: "u1", name: "Ada" });
   });
 
+  it("sdk.request() delegates unary calls to the api module", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    const promise = sdk.request("POST", { endpoint: "/v1/taxes" });
+    const sent = transport.sent[transport.sent.length - 1]!;
+    expect(sent.namespace).toBe("api");
+    expect(sent.action).toBe("request");
+    expect(sent.payload).toMatchObject({ method: "POST", endpoint: "/v1/taxes" });
+
+    transport.reply(sent, { status: 200, data: { ok: true }, headers: {} });
+    await expect(promise).resolves.toMatchObject({ status: 200 });
+  });
+
+  it("sdk.request() keeps the raw namespace/action form working", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    const promise = sdk.request("auth", "getUser");
+    const sent = transport.sent[transport.sent.length - 1]!;
+    expect(sent.namespace).toBe("auth");
+    expect(sent.action).toBe("getUser");
+
+    transport.reply(sent, { id: "u1" });
+    await expect(promise).resolves.toMatchObject({ id: "u1" });
+  });
+
+  it("sdk.request() rejects the removed object form", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    await expect(
+      (sdk.request as (...args: unknown[]) => Promise<unknown>)({ endpoint: "/x" }),
+    ).rejects.toMatchObject({ code: "INVALID_PARAMS" });
+  });
+
+  it("sdk.request() keeps working when destructured off the instance", async () => {
+    const transport = new ScriptedTransport();
+    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    await sdk.initialize();
+
+    // Detached references must keep their receiver — `request` reads
+    // `this.api` / `this.rpc` internally.
+    const { request, requestSafe } = sdk;
+    const promise = (request as (...args: unknown[]) => Promise<unknown>)("POST", {
+      endpoint: "/v1/taxes",
+    });
+    const sent = transport.sent[transport.sent.length - 1]!;
+    expect(sent.namespace).toBe("api");
+    expect(sent.action).toBe("request");
+
+    transport.reply(sent, { status: 200, data: { ok: true }, headers: {} });
+    await expect(promise).resolves.toMatchObject({ status: 200 });
+
+    const safePromise = requestSafe("auth", "getUser");
+    const sentSafe = transport.sent[transport.sent.length - 1]!;
+    transport.reply(sentSafe, { id: "u1" });
+    await expect(safePromise).resolves.toMatchObject({ ok: true, value: { id: "u1" } });
+  });
+
   it("throws SdkError if initialize() is called after destroy()", async () => {
     const transport = new ScriptedTransport();
     const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
@@ -292,7 +355,7 @@ describe("MiniAppSdk", () => {
     expect(snapshot.transport).toMatchObject({ started: true });
     expect(snapshot.pendingRequests).toEqual([]);
     expect(snapshot.registeredModules).toContain("auth");
-    expect(snapshot.registeredModules).toContain("http");
+    expect(snapshot.registeredModules).toContain("api");
   });
 
   it("debug.snapshot() reflects an in-flight request", async () => {
@@ -534,13 +597,13 @@ describe("MiniAppSdk", () => {
   });
 
   it("gates notifications and links on negotiated capabilities", async () => {
-    const transport = new ScriptedTransport("flutter", ["auth", "http"]);
+    const transport = new ScriptedTransport("flutter", ["auth", "api"]);
     const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     expect(sdk.notifications.isSupported()).toBe(false);
     // links.isSupported is a boolean property in @lizuz/mini-app-types (not a function)
     expect((sdk.links as unknown as { isSupported: boolean | (() => boolean) }).isSupported).toBe(false);
-    expect(sdk.capabilities).toEqual(["auth", "http"]);
+    expect(sdk.capabilities).toEqual(["auth", "api"]);
   });
 });

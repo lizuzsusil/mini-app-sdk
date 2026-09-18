@@ -46,6 +46,78 @@ describe("StreamBuilder", () => {
     await expect(collected).resolves.toEqual(["alpha", "beta"]);
   });
 
+  it("yields chunks live as they arrive instead of buffering until done", async () => {
+    const builder = new StreamBuilder();
+    const seen: string[] = [];
+    const consuming = (async () => {
+      for await (const part of builder.iterate()) seen.push(String(part));
+    })();
+
+    await new Promise((r) => setTimeout(r, 5));
+    expect(seen).toEqual([]);
+    builder.addChunk(chunk("a", 0));
+    await new Promise((r) => setTimeout(r, 5));
+    expect(seen).toEqual(["a"]);
+    builder.addChunk(chunk("b", 1));
+    builder.addChunk(chunk("c", 2, true));
+    await consuming;
+    expect(seen).toEqual(["a", "b", "c"]);
+  });
+
+  it("orders pre-arrived out-of-order chunks by index", async () => {
+    const builder = new StreamBuilder();
+    builder.addChunk(chunk("one", 1));
+    builder.addChunk(chunk("zero", 0));
+    builder.addChunk(chunk("two", 2, true));
+
+    await expect(collect(builder)).resolves.toEqual(["zero", "one", "two"]);
+  });
+
+  it("does not re-yield a retransmitted index to a live consumer", async () => {
+    const builder = new StreamBuilder();
+    const seen: string[] = [];
+    const consuming = (async () => {
+      for await (const part of builder.iterate()) seen.push(String(part));
+    })();
+
+    builder.addChunk(chunk("first", 0));
+    await new Promise((r) => setTimeout(r, 5));
+    builder.addChunk(chunk("retransmit", 0));
+    await new Promise((r) => setTimeout(r, 5));
+    expect(seen).toEqual(["first"]);
+    builder.addChunk(chunk("last", 1, true));
+    await consuming;
+    expect(seen).toEqual(["first", "last"]);
+  });
+
+  it("keeps already-yielded chunks when the stream fails mid-iteration", async () => {
+    const builder = new StreamBuilder();
+    const seen: string[] = [];
+    const consuming = (async () => {
+      for await (const part of builder.iterate()) seen.push(String(part));
+    })();
+
+    builder.addChunk(chunk("partial", 0));
+    await new Promise((r) => setTimeout(r, 5));
+    builder.rejectChunk(new Error("boom"));
+    await consuming;
+    expect(seen).toEqual(["partial"]);
+  });
+
+  it("wakes a waiting iterator on cancel", async () => {
+    const builder = new StreamBuilder();
+    const seen: string[] = [];
+    const consuming = (async () => {
+      for await (const part of builder.iterate()) seen.push(String(part));
+    })();
+
+    await new Promise((r) => setTimeout(r, 5));
+    builder.cancel();
+    await consuming;
+    expect(seen).toEqual([]);
+    expect(builder.isRejected).toBe(true);
+  });
+
   it("deduplicates a retransmitted chunk by index", async () => {
     const builder = new StreamBuilder();
     builder.addChunk(chunk("first", 0));

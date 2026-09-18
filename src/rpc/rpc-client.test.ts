@@ -220,7 +220,7 @@ describe("RpcClient", () => {
     };
     expect(payload.protocolVersion).toBe("1.0.0");
     expect(payload.capabilities).toContain("auth");
-    expect(payload.capabilities).toContain("http");
+    expect(payload.capabilities).toContain("api");
   });
 
   it("narrows capabilities to what the host confirms it supports", async () => {
@@ -240,14 +240,14 @@ describe("RpcClient", () => {
         {
           status: "ok",
           protocolVersion: "1.0.0",
-          capabilities: ["auth", "http"],
+          capabilities: ["auth", "api"],
         },
         { requestId: sent.requestId, traceId: sent.traceId },
       ),
     );
     await promise;
 
-    expect(client.getCapabilities()).toEqual(["auth", "http"]);
+    expect(client.getCapabilities()).toEqual(["auth", "api"]);
   });
 
   it("assumes full capability support when the host does not report any", async () => {
@@ -531,14 +531,14 @@ describe("RpcClient dev-mode capability warnings", () => {
 
     await expect(client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION)).rejects.toMatchObject({ code: "CAPABILITY_NOT_SUPPORTED" });
     await expect(client.request(NAMESPACES.DEVICE, ACTIONS.DEVICE.LOCATION)).rejects.toMatchObject({ code: "CAPABILITY_NOT_SUPPORTED" });
-    // GIC_CHAT is gated by HTTP, not its own namespace
-    await expect(client.request(NAMESPACES.GIC_CHAT, ACTIONS.GIC_CHAT.START_SESSION)).rejects.toMatchObject({ code: "CAPABILITY_NOT_SUPPORTED" });
-    // After HTTP is negotiated, GIC should pass
+    // Every namespace is gated by its own capability — no special cases.
+    await expect(client.request(NAMESPACES.STORAGE, ACTIONS.STORAGE.GET)).rejects.toMatchObject({ code: "CAPABILITY_NOT_SUPPORTED" });
+    // After the capability is negotiated, the same call passes the gate.
     const transport2 = new FakeTransport();
     const client2 = new RpcClient(transport2, { miniAppId: "test-mini-app", timeout: 5000, devMode: true, logger });
     client2.start();
-    await handshakeWithCapabilities(transport2, client2, ["http"]);
-    const p = client2.request(NAMESPACES.GIC_CHAT, ACTIONS.GIC_CHAT.START_SESSION);
+    await handshakeWithCapabilities(transport2, client2, ["storage"]);
+    const p = client2.request(NAMESPACES.STORAGE, ACTIONS.STORAGE.GET);
     await resolveRequest(transport2, transport2.lastSent!, p);
   });
 
@@ -592,8 +592,8 @@ describe("RpcClient stream requests", () => {
   ) {
     const message = createMessage(
       "stream",
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
       HOST_TARGET,
       "test-mini-app",
       data,
@@ -614,14 +614,14 @@ describe("RpcClient stream requests", () => {
     const client = makeClient(transport);
     client.start();
 
-    await client.sendStreamRequest(NAMESPACES.HTTP, ACTIONS.HTTP.CHAT_STREAM, {
+    await client.sendStreamRequest(NAMESPACES.API, ACTIONS.API.REQUEST, {
       messages: [{ role: "user", content: "Hi" }],
     });
 
     const sent = transport.lastSent!;
     expect(sent.type).toBe("request");
-    expect(sent.namespace).toBe("http");
-    expect(sent.action).toBe("chatStream");
+    expect(sent.namespace).toBe("api");
+    expect(sent.action).toBe("request");
     expect(sent.target).toBe(HOST_TARGET);
     expect(sent.source).toBe("test-mini-app");
   });
@@ -632,8 +632,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
     );
     const sent = transport.lastSent!;
 
@@ -662,8 +662,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
     );
     const sent = transport.lastSent!;
 
@@ -700,8 +700,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
     );
     const sent = transport.lastSent!;
 
@@ -728,8 +728,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builder = await client.sendStreamRequest(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
     );
     await expect(builder.waitUntilDone()).rejects.toBeInstanceOf(TimeoutError);
   });
@@ -740,8 +740,8 @@ describe("RpcClient stream requests", () => {
     client.start();
 
     const builder = await client.sendStreamRequest(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
     );
     client.stop();
 
@@ -974,8 +974,8 @@ describe("RpcClient stream cancellation", () => {
 
     const controller = new AbortController();
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
       undefined,
       { signal: controller.signal },
     );
@@ -991,7 +991,7 @@ describe("RpcClient stream cancellation", () => {
 
     const cancel = transport.sent.find(
       (m) =>
-        m.namespace === NAMESPACES.HTTP && m.action === ACTIONS.HTTP.CANCEL,
+        m.namespace === NAMESPACES.API && m.action === ACTIONS.API.CANCEL,
     );
     expect(cancel).toBeDefined();
     expect((cancel!.payload as { requestId: string }).requestId).toBe(
@@ -1008,8 +1008,8 @@ describe("RpcClient stream cancellation", () => {
     controller.abort();
 
     const builder = await client.sendStreamRequest(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
       undefined,
       { signal: controller.signal },
     );
@@ -1021,7 +1021,7 @@ describe("RpcClient stream cancellation", () => {
     expect(
       transport.sent.some(
         (m) =>
-          m.namespace === NAMESPACES.HTTP && m.action === ACTIONS.HTTP.CANCEL,
+          m.namespace === NAMESPACES.API && m.action === ACTIONS.API.CANCEL,
       ),
     ).toBe(true);
   });
@@ -1032,8 +1032,8 @@ describe("RpcClient stream cancellation", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
     );
     const sent = transport.lastSent!;
     const builder = await builderPromise;
@@ -1046,7 +1046,7 @@ describe("RpcClient stream cancellation", () => {
     expect(
       transport.sent.some(
         (m) =>
-          m.namespace === NAMESPACES.HTTP && m.action === ACTIONS.HTTP.CANCEL,
+          m.namespace === NAMESPACES.API && m.action === ACTIONS.API.CANCEL,
       ),
     ).toBe(true);
   });
@@ -1287,8 +1287,8 @@ describe("RpcClient tracing", () => {
     client.start();
 
     const builderPromise = client.sendStreamRequest(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.CHAT_STREAM,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
     );
     const sent = transport.lastSent!;
     const chunk = createMessage(
@@ -1307,7 +1307,7 @@ describe("RpcClient tracing", () => {
 
     const span = tracer.spans.find((s) => s.name === "rpc.stream");
     expect(span).toBeDefined();
-    expect(span!.attributes).toMatchObject({ namespace: "http", action: "chatStream" });
+    expect(span!.attributes).toMatchObject({ namespace: "api", action: "request" });
     expect(span!.ended).toBe(true);
   });
 
@@ -1367,8 +1367,8 @@ describe("RpcClient mapPayload", () => {
     client.start();
 
     const promise = client.request<string>(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.GET,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
       undefined,
       { mapPayload: (payload) => `mapped:${String(payload)}` },
     );
@@ -1394,8 +1394,8 @@ describe("RpcClient mapPayload", () => {
     client.start();
 
     const promise = client.request(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.GET,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
       undefined,
       {
         mapPayload: () => {
@@ -1427,8 +1427,8 @@ describe("RpcClient mapPayload", () => {
     client.start();
 
     const promise = client.request(
-      NAMESPACES.HTTP,
-      ACTIONS.HTTP.GET,
+      NAMESPACES.API,
+      ACTIONS.API.REQUEST,
       undefined,
       {
         mapPayload: (payload) => {

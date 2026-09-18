@@ -573,9 +573,8 @@ export class RpcClient {
     );
   }
 
-  /** GIC_CHAT is gated by HTTP, not its own namespace — keep single HTTP gate per spec. */
+  /** Maps a namespace to the capability that gates it — identity by default. */
   private getRequiredCapability(namespace: string): string {
-    if (namespace === NAMESPACES.GIC_CHAT) return NAMESPACES.HTTP;
     return namespace;
   }
 
@@ -892,11 +891,13 @@ export class RpcClient {
   /**
    * Fire-and-forget host notification that a stream is being cancelled, so
    * the host can stop generating chunks instead of streaming into the void.
+   * Scoped to the stream's own namespace (`api.cancel` for `api.request`
+   * streams) so no `http` namespace is involved.
    */
   private notifyHostStreamCancelled(requestId: string): void {
     const record = this.streamConsumers.get(requestId);
     if (!record) return;
-    this.request<unknown>(record.namespace, ACTIONS.HTTP.CANCEL, {
+    this.request<unknown>(record.namespace, ACTIONS.API.CANCEL, {
       requestId,
     }).catch((error: unknown) => {
       this.logger.warn(
