@@ -1,12 +1,17 @@
 /**
  * Generic `api.request` contract — single entry point for unary + streaming.
  *
- * - `method` defaults to `'POST'`.
+ * - `method` defaults to `'POST'`. It describes the mini app's inner intent
+ *   and travels inside the BFF envelope (the host transport is always POST).
+ * - `path` is the BFF inner route (e.g. `/chat/stream`). Required — the BFF
+ *   cannot route without it. `endpoint` is the deprecated alias.
+ * - `query`, when present, is folded into the envelope path as a query
+ *   string so no routing information is lost in transit.
  * - `stream` defaults to `false` (unary). `true` opens a live stream consumed
- *   via the returned `StreamBuilder` (async iteration). Init is just a unary
- *   call — no extra flag.
- * - `endpoint`/`query` let file/binary calls ride the same method; chat calls
- *   stay endpoint-free with semantic `body` shapes owned by each mini app.
+ *   via the returned `StreamBuilder` (raw BFF bytes — parse them with
+ *   `parseSseStream`). Init is just a unary call — no extra flag.
+ * - The SDK wraps `{method, path, body}` into the BFF envelope and puts it
+ *   in the wire `body`; the host POSTs it verbatim without interpretation.
  */
 export type ApiRequestMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -16,7 +21,9 @@ export interface ApiUploadProgress {
 }
 
 export interface ApiRequestParams<TBody = unknown> {
-  /** Proxied file/http calls — when present the host fetches this URL. */
+  /** BFF inner route (e.g. `/chat/stream`). Required. */
+  path?: string;
+  /** @deprecated Use `path`. Mapped into the envelope when `path` is absent. */
   endpoint?: string;
   query?: Record<string, string>;
   body?: TBody;

@@ -31,6 +31,8 @@ import {
 import type { RpcMetricsSnapshot, Tracer } from "../observability";
 import type { RpcMiddleware, RpcRequestOptions } from "../rpc";
 import { RpcClient } from "../rpc";
+import type { SseStreamEvent } from "../stream/sse-parser";
+import { parseSseStream } from "../stream/sse-parser";
 import type { Transport } from "../transport";
 import { DefaultTransport } from "../transport";
 import type {
@@ -128,6 +130,19 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly notifications: NotificationsSdkModule;
   readonly links: LinksSdkModule;
   readonly debug: SdkDebug;
+  /**
+   * Stream helpers for CDN-global consumers (`window.__GSA_SDK__`), which
+   * can't reach the package's named exports. npm consumers import
+   * `parseSseStream` directly. Parses the raw chunks of a streamed
+   * `api.request` (e.g. `StreamBuilder.iterate()`) into SSE events — the
+   * host forwards BFF bytes verbatim, so all framing interpretation lives
+   * here, shared by every host platform.
+   */
+  readonly stream: {
+    parseSseStream: (
+      chunks: AsyncIterable<string | Uint8Array>,
+    ) => AsyncGenerator<SseStreamEvent>;
+  };
 
   private readonly rpc: RpcClient;
   private readonly logger: Logger;
@@ -234,6 +249,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     // must keep working.
     this.request = this.request.bind(this);
     this.requestSafe = this.requestSafe.bind(this);
+
+    this.stream = { parseSseStream };
 
     this.debug = {
       snapshot: (): SdkDebugSnapshot => ({

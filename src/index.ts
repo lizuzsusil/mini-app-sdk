@@ -72,7 +72,8 @@ export type {
   RpcRequestOptions,
   RpcStreamOptions,
 } from "./rpc";
-export { StreamBuilder } from "./stream";
+export type { SseStreamEvent } from "./stream";
+export { parseSseStream, StreamBuilder } from "./stream";
 export type {
   Transport,
   TransportDebugInfo,

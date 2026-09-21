@@ -15,11 +15,14 @@ export const DEFAULT_API_METHOD = "POST" as const;
  *
  * Only the positional form is supported: `request("POST", { ... })`.
  * - `method` defaults to `POST`; `stream` defaults to `false` (unary).
- * - `stream: true` opens a live stream via `rpc.sendStreamRequest` — chat SSE
- *   text and file/binary bytes share this path; the mini app interprets the
- *   chunks. Init is just a unary call (no extra flag).
- * - `endpoint`/`query` ride along for proxied file calls; endpoint-free
- *   bodies stay opaque — no per-mini-app validation lives here.
+ * - `path` (legacy alias: `endpoint`) is required — it becomes the BFF
+ *   envelope's inner route. `query` is folded into it as a query string.
+ * - The wire `body` IS the BFF envelope `{method, path, body}`; the host
+ *   POSTs it verbatim to `{BASE_URI}/api-orchestrate` (unary) or
+ *   `{BASE_URI}/sse-orchestrate` (`stream: true`) with zero interpretation.
+ * - `stream: true` opens a live stream via `rpc.sendStreamRequest` — raw BFF
+ *   bytes the mini app parses (e.g. with `parseSseStream`). Init is just a
+ *   unary call (no extra flag).
  * - Legacy `method: "STREAM"` (and `stream: { signal }`) from older bundles
  *   is remapped to `stream: true` so they keep working.
  */
@@ -56,10 +59,28 @@ export function createApiModule(rpc: RpcClient): ApiSdkModule {
       stream = true;
     }
 
-    const payload: Record<string, unknown> = { method: resolvedMethod };
-    if (params.path !== undefined) payload.path = params.path;
-    if (params.query !== undefined) payload.query = params.query;
-    if (params.body !== undefined) payload.body = params.body;
+    const innerPath = params.path;
+    if (innerPath === undefined) {
+      throw new SdkError({
+        code: "INVALID_PARAMS",
+        message: 'api.request needs a route: pass { path: "/..." }.',
+      });
+    }
+    let envelopePath = innerPath;
+    if (params.query && Object.keys(params.query).length > 0) {
+      const search = new URLSearchParams(params.query).toString();
+      if (search)
+        envelopePath += `${envelopePath.includes("?") ? "&" : "?"}${search}`;
+    }
+
+    // The BFF envelope — the host forwards it byte-for-byte.
+    const envelope: Record<string, unknown> = {
+      method: resolvedMethod,
+      path: envelopePath,
+    };
+    if (params.body !== undefined) envelope.body = params.body;
+
+    const payload: Record<string, unknown> = { body: envelope };
     if (params.headers !== undefined) payload.headers = params.headers;
 
     const withProgress = <R>(task: () => Promise<R>): Promise<R> => {
