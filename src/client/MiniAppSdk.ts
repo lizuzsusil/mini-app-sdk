@@ -34,8 +34,6 @@ import { RpcClient } from "../rpc";
 import type { Transport } from "../transport";
 import { DefaultTransport } from "../transport";
 import type {
-  ApiRequestParams,
-  ApiResult,
   ApiSdkModule,
   AppearanceSdkModule,
   AuthSdkModule,
@@ -669,54 +667,14 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     };
   }
 
-  /**
-   * Generic request shorthand — `sdk.request("POST", { ... })` delegates to
-   * the `api` module (unary by default, `stream: true` for live streams).
-   * `sdk.api.request(...)` remains as an equivalent alias.
-   */
-  request<T = unknown, B = unknown>(
-    method: string,
-    params: ApiRequestParams<B> & { stream: true },
-  ): Promise<T>;
-  request<T = unknown, B = unknown>(
-    method?: string,
-    params?: ApiRequestParams<B>,
-  ): Promise<ApiResult<T>>;
   /** Raw RPC — `request(namespace, action, payload?, options?)`. */
   request<T>(
     namespace: string,
     action: string,
     payload?: unknown,
     options?: RpcRequestOptions,
-  ): Promise<T>;
-  async request(
-    methodOrNamespace?: string,
-    actionOrParams?: string | ApiRequestParams<unknown>,
-    payload?: unknown,
-    options?: RpcRequestOptions,
-  ): Promise<unknown> {
-    if (
-      methodOrNamespace !== undefined &&
-      typeof methodOrNamespace !== "string"
-    ) {
-      throw new SdkError({
-        code: "INVALID_PARAMS",
-        message:
-          'Use sdk.request("POST", { ... }) — the object form is no longer supported.',
-      });
-    }
-    if (typeof actionOrParams === "string") {
-      return this.rpc.request(
-        methodOrNamespace as string,
-        actionOrParams,
-        payload,
-        options,
-      );
-    }
-    return (this.api.request as ApiSdkModule["request"])(
-      methodOrNamespace as string,
-      (actionOrParams ?? {}) as ApiRequestParams<unknown>,
-    ) as Promise<unknown>;
+  ): Promise<T> {
+    return this.rpc.request<T>(namespace, action, payload, options);
   }
 
   async requestSafe<T>(

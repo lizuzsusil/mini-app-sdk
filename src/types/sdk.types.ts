@@ -7,7 +7,7 @@ import type {
   MiniAppSdkInterface as NpmMiniAppSdkInterface,
   RpcRequestOptions,
 } from "@lizuz/mini-app-types";
-import type { ApiRequestParams, ApiResult, ApiSdkModule } from "./api.types";
+import type { ApiSdkModule } from "./api.types";
 
 export type {
   AdaptiveTimeoutOptions,
@@ -36,19 +36,6 @@ export interface MiniAppSdkInterface
   > {
   api: ApiSdkModule;
   usePlugin(plugin: SdkPlugin): Promise<void>;
-  /**
-   * Generic request shorthand — `sdk.request("POST", { ... })` delegates to
-   * the `api` module (unary by default, `stream: true` for live streams).
-   * `sdk.api.request(...)` remains as an equivalent alias.
-   */
-  request<T = unknown, B = unknown>(
-    method: string,
-    params: ApiRequestParams<B> & { stream: true },
-  ): Promise<T>;
-  request<T = unknown, B = unknown>(
-    method?: string,
-    params?: ApiRequestParams<B>,
-  ): Promise<ApiResult<T>>;
   /** Raw RPC — `request(namespace, action, payload?, options?)`. */
   request<T>(
     namespace: string,

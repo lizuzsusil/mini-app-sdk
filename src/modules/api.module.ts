@@ -57,7 +57,7 @@ export function createApiModule(rpc: RpcClient): ApiSdkModule {
     }
 
     const payload: Record<string, unknown> = { method: resolvedMethod };
-    if (params.endpoint !== undefined) payload.endpoint = params.endpoint;
+    if (params.path !== undefined) payload.path = params.path;
     if (params.query !== undefined) payload.query = params.query;
     if (params.body !== undefined) payload.body = params.body;
     if (params.headers !== undefined) payload.headers = params.headers;
