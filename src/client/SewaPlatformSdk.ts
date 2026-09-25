@@ -19,7 +19,6 @@ import {
   createAuthModule,
   createConfigModule,
   createDeviceModule,
-  createFlagsModule,
   createLinksModule,
   createNavigationModule,
   createNotificationsModule,
@@ -43,11 +42,8 @@ import type {
   DeviceSdkModuleWithGuards,
   Diagnostic,
   EventHandler,
-  FlagsSdkModule,
   HostDescriptor,
   LinksSdkModule,
-  MiniAppSdkInterface,
-  MiniAppSdkOptions,
   NavigationSdkModule,
   NotificationsSdkModule,
   PermissionsSdkModule,
@@ -56,6 +52,8 @@ import type {
   SdkDebug,
   SdkDebugSnapshot,
   SdkPlugin,
+  SewaPlatformSdkInterface,
+  SewaPlatformSdkOptions,
   StorageSdkModule,
 } from "../types";
 import type {
@@ -71,46 +69,18 @@ import {
   unregisterInstance,
 } from "./instance-registry";
 
-/**
- * Extra, internal-only construction knobs. Deliberately **not** part of
- * `MiniAppSdkOptions` (the public, vendor-facing options type) — a vendor
- * mini-app developer configures `miniAppId`/`timeout`/`retryAttempts` the
- * same way they always have. `transport`, `logger`, `allowedOrigin`, and
- * `tracer` are for host SDKs and internal callers: `transport` to inject a
- * non-default delivery mechanism, `logger` to wire up real logging,
- * `allowedOrigin` to pin `DefaultTransport` to a known host origin from the
- * start instead of learning it from the first message (see
- * `transport/DefaultTransport.ts`), and `tracer` to bridge RPC spans into
- * a host's existing tracing setup (OpenTelemetry, ...). `allowedOrigin` is
- * ignored if a custom `transport` is also provided — origin handling is that
- * transport's own concern at that point.
- */
-export interface MiniAppSdkDependencies {
+export interface SewaPlatformSdkDependencies {
   transport?: Transport;
   logger?: Logger;
   allowedOrigin?: string;
   tracer?: Tracer;
 }
 
-/** Upper bound on appearance hydration during `initialize()`. */
 const APPEARANCE_HYDRATION_BUDGET_MS = 1200;
 
-/**
- * The SDK's composition root. `MiniAppSdk`'s only responsibilities are:
- *  1. composing the `RpcClient`, the `ModuleRegistry`, and all domain
- *     modules,
- *  2. owning instance lifecycle (`initialize` / `destroy`),
- *  3. exposing the public API surface (`MiniAppSdkInterface`).
- *
- * It contains no RPC logic (that's `RpcClient`), no transport wiring
- * (that's `Transport`/`DefaultTransport`), and no per-module business logic
- * (that's `modules/*`). If you're about to add a `namespace`/`action`
- * string or a `.request()` call directly in this file, it almost certainly
- * belongs in a module file instead.
- */
 export type { SdkPlugin } from "../types";
 
-export class MiniAppSdk implements MiniAppSdkInterface {
+export class SewaPlatformSdk implements SewaPlatformSdkInterface {
   readonly miniAppId: string;
   readonly version = PROTOCOL_VERSION;
   readonly traceId: string;
@@ -119,7 +89,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
 
   readonly auth: AuthSdkModule;
   readonly permissions: PermissionsSdkModule;
-  readonly flags: FlagsSdkModule;
   readonly config: ConfigSdkModule;
   readonly navigation: NavigationSdkModule;
   readonly api: ApiSdkModule;
@@ -130,14 +99,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   readonly notifications: NotificationsSdkModule;
   readonly links: LinksSdkModule;
   readonly debug: SdkDebug;
-  /**
-   * Stream helpers for CDN-global consumers (`window.__GSA_SDK__`), which
-   * can't reach the package's named exports. npm consumers import
-   * `parseSseStream` directly. Parses the raw chunks of a streamed
-   * `api.request` (e.g. `StreamBuilder.iterate()`) into SSE events — the
-   * host forwards BFF bytes verbatim, so all framing interpretation lives
-   * here, shared by every host platform.
-   */
+
   readonly stream: {
     parseSseStream: (
       chunks: AsyncIterable<string | Uint8Array>,
@@ -159,12 +121,12 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private readonly plugins: SdkPlugin[] = [];
 
   constructor(
-    options: MiniAppSdkOptions,
-    dependencies: MiniAppSdkDependencies = {},
+    options: SewaPlatformSdkOptions,
+    dependencies: SewaPlatformSdkDependencies = {},
   ) {
     validateSdkOptions(options);
     this.miniAppId = options.miniAppId;
-    const devMode = MiniAppSdk.resolveDevMode(options);
+    const devMode = SewaPlatformSdk.resolveDevMode(options);
     this.logger =
       dependencies.logger ??
       (options.logLevel !== undefined || devMode
@@ -201,14 +163,8 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     });
     this.traceId = this.rpc.getTraceId();
 
-    // The built-in modules are registered by name instead of being new'd
-    // directly, so `registerModule`/`getModule` work uniformly for built-ins
-    // and anything a host or vendor adds later. `platform` is registered
-    // separately below since its factory needs a slightly different shape
-    // (see `createPlatformModule`'s doc comment).
     this.registry.register(NAMESPACES.AUTH, createAuthModule);
     this.registry.register(NAMESPACES.PERMISSIONS, createPermissionsModule);
-    this.registry.register(NAMESPACES.FLAGS, createFlagsModule);
     this.registry.register(NAMESPACES.CONFIG, createConfigModule);
     this.registry.register(NAMESPACES.NAVIGATION, createNavigationModule);
     this.registry.register(NAMESPACES.STORAGE, createStorageModule);
@@ -222,7 +178,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.permissions = this.requireModule<PermissionsSdkModule>(
       NAMESPACES.PERMISSIONS,
     );
-    this.flags = this.requireModule<FlagsSdkModule>(NAMESPACES.FLAGS);
     this.config = this.requireModule<ConfigSdkModule>(NAMESPACES.CONFIG);
     this.navigation = this.requireModule<NavigationSdkModule>(
       NAMESPACES.NAVIGATION,
@@ -244,9 +199,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.appearanceHandle = createAppearanceModule(this.rpc);
     this.appearance = this.appearanceHandle.module;
 
-    // `request`/`requestSafe` read instance state (`this.api`, `this.rpc`),
-    // so bind them — a destructured reference (e.g. `const { request } = sdk`)
-    // must keep working.
     this.request = this.request.bind(this);
     this.requestSafe = this.requestSafe.bind(this);
 
@@ -276,12 +228,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     registerInstance(this);
   }
 
-  /**
-   * Resolves whether dev-mode warnings/logging should be enabled. An explicit
-   * `options.devMode` always wins; otherwise it's inferred from the bundle's
-   * `NODE_ENV`, defaulting to off when the environment variable is absent.
-   */
-  private static resolveDevMode(options: MiniAppSdkOptions): boolean {
+  private static resolveDevMode(options: SewaPlatformSdkOptions): boolean {
     if (options.devMode !== undefined) return options.devMode;
     const env = (
       globalThis as unknown as {
@@ -291,12 +238,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     return env?.NODE_ENV !== undefined && env.NODE_ENV !== "production";
   }
 
-  /**
-   * Retrieves a module by namespace, throwing if it hasn't been registered.
-   * Every module assigned in the constructor is registered just above this
-   * helper's call sites, so reaching this code with a missing module is a
-   * programmer error, not a runtime condition.
-   */
   private requireModule<T>(name: string): T {
     const module = this.registry.get<T>(name);
     if (!module) {
@@ -308,25 +249,15 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     return module;
   }
 
-  /**
-   * Namespaces the host confirmed support for during the handshake. Empty
-   * until `initialize()` resolves.
-   */
   get capabilities(): readonly string[] {
     return this.rpc.getCapabilities();
   }
 
-  /**
-   * Starts the transport, performs the handshake, and resolves the current
-   * platform type. Idempotent and concurrency-safe: calling `initialize()`
-   * multiple times (including while a prior call is still in flight)
-   * returns the same underlying promise instead of re-running the sequence.
-   */
   async initialize(): Promise<void> {
     if (this.destroyed) {
       throw new SdkError({
         code: "SDK_ALREADY_DESTROYED",
-        message: `Cannot initialize MiniAppSdk("${this.miniAppId}") — this instance has already been destroyed.`,
+        message: `Cannot initialize SewaPlatformSdk("${this.miniAppId}") — this instance has already been destroyed.`,
       });
     }
     if (this.initialized) return;
@@ -344,24 +275,15 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.rpc.start();
     await this.rpc.handshake();
 
-    // `platform.getType` answers in one of two shapes — a bare
-    // `"web"`/`"flutter"` string, or an object that also carries the host's
-    // appearance hint. `applyResponse` accepts both and hands back whichever
-    // hint rode along.
     const raw = await this.rpc.request<
       PlatformTypeLiteral | PlatformTypeResponse
     >(NAMESPACES.PLATFORM, ACTIONS.PLATFORM.GET_TYPE);
     const { type: platformType, appearance: appearanceHint } =
       this.applyPlatformResponse(raw);
 
-    // Host changes must be observed on every shell, including the Flutter
-    // one that delivers appearance via the hint and never negotiates the
-    // `appearance` namespace — so this is not gated on capabilities.
     this.subscribeToAppearanceEvents();
 
     if (appearanceHint) {
-      // The hint already carries the host's current locale/theme, so the
-      // `appearance.*` round trips below would only re-fetch what we have.
       this.appearanceHandle.applyHint(appearanceHint);
     } else if (this.capabilities.includes(NAMESPACES.APPEARANCE)) {
       await this.hydrateAppearance();
@@ -384,7 +306,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
         });
       }
     }
-    this.logger.info(`MiniAppSdk("${this.miniAppId}") initialized`, {
+    this.logger.info(`SewaPlatformSdk("${this.miniAppId}") initialized`, {
       platformType,
     });
   }
@@ -400,13 +322,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     );
   }
 
-  /**
-   * Fallback for hosts that implement the `appearance` namespace but don't
-   * put the hint on `platform.getType` — i.e. any shell built against an
-   * earlier SDK. Bounded budget: appearance is additive and must never block
-   * first paint. If the host is slow or doesn't answer, initialize() still
-   * resolves and the app falls back to the store defaults.
-   */
   private async hydrateAppearance(): Promise<void> {
     const hydration = Promise.all([
       this.appearance.getLocale(),
@@ -418,9 +333,7 @@ export class MiniAppSdk implements MiniAppSdkInterface {
   private diagnose(): Diagnostic[] {
     const diags: Diagnostic[] = [];
     const snap = this.debug.snapshot();
-    // Defer circular call — build snapshot manually to avoid recursion
-    // diagnose() is called from debug.snapshot's closure above, so we need
-    // to avoid re-entering debug.snapshot(). Use raw fields instead.
+
     try {
       if (!this.initialized && !this.destroyed) {
         diags.push({
@@ -516,11 +429,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     return diags;
   }
 
-  /**
-   * Tears down the transport and clears all pending state. Safe to call
-   * more than once. After `destroy()`, this instance cannot be
-   * re-initialized — construct a new `MiniAppSdk` instead.
-   */
   destroy(): void {
     if (this.destroyed) return;
     for (const plugin of [...this.plugins].reverse()) {
@@ -538,18 +446,9 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     this.initialized = false;
     this.destroyed = true;
     unregisterInstance(this);
-    this.logger.info(`MiniAppSdk("${this.miniAppId}") destroyed`);
+    this.logger.info(`SewaPlatformSdk("${this.miniAppId}") destroyed`);
   }
 
-  /**
-   * Subscribes to a host-emitted event. Returns an unsubscribe function.
-   * Delegates entirely to `RpcClient`; the only value this method adds over
-   * calling `rpc.onEvent` directly is that it's part of the stable public
-   * surface consumers already depend on. Known events (see `SdkEventMap`)
-   * get typed payloads; host-defined events outside the map remain usable
-   * through the `string` overload.
-   * When `options.signal` is provided, aborting the signal auto-unsubscribes.
-   */
   on<K extends keyof SdkEventMap>(
     event: K,
     handler: (payload: SdkEventMap[K]) => void,
@@ -684,7 +583,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     };
   }
 
-  /** Raw RPC — `request(namespace, action, payload?, options?)`. */
   request<T>(
     namespace: string,
     action: string,
@@ -724,22 +622,10 @@ export class MiniAppSdk implements MiniAppSdkInterface {
       });
   }
 
-  /**
-   * Registers a middleware that wraps every request made through any
-   * module from this point forward — logging, auth-token refresh, request
-   * shaping, custom metrics, whatever a host or vendor needs. See
-   * `rpc/middleware.ts` for the execution model.
-   */
   use(middleware: RpcMiddleware): void {
     this.rpc.use(middleware);
   }
 
-  /**
-   * Installs a plugin. Plugins can register middleware, event listeners,
-   * and modules via the provided context. Lifecycle hooks `onInitialize`
-   * are invoked on next `initialize()`, and `onDestroy` in reverse order
-   * on `destroy()`. Additive — existing `use()` / `registerModule()` remain.
-   */
   async usePlugin(plugin: SdkPlugin): Promise<void> {
     if (this.plugins.some((p) => p.name === plugin.name)) {
       this.logger.warn(`Plugin "${plugin.name}" already installed — skipping`);
@@ -758,11 +644,6 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     }
   }
 
-  /**
-   * A point-in-time snapshot of every request this instance has made:
-   * totals plus a per-`namespace.action` breakdown of counts, timings,
-   * failures, timeouts, and retries.
-   */
   getMetrics(): RpcMetricsSnapshot {
     return this.rpc.getMetrics();
   }
@@ -790,29 +671,11 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     return this.rpc.getCapabilityVersions();
   }
 
-  /**
-   * Adds a module beyond the built-in ones — for a host-specific capability
-   * or a vendor's own namespace — without needing to fork the SDK. The
-   * factory receives the same `RpcClient` every built-in module uses, so a
-   * custom module gets retry, timeout, and middleware behavior for free.
-   * Retrieve it later with `getModule()`.
-   *
-   * ```ts
-   * sdk.registerModule('payments', (rpc) => ({
-   *   charge: (amount: number) => rpc.request('payments', 'charge', { amount }),
-   * }));
-   * const payments = sdk.getModule<{ charge(amount: number): Promise<void> }>('payments');
-   * ```
-   */
   registerModule<T>(name: string, factory: ModuleFactory<T>): void {
     this.registry.register(name, factory);
     this.registry.build(this.rpc);
   }
 
-  /**
-   * Registers a lazy module factory that is only resolved on first `getModuleAsync()` /
-   * `buildAsync()`. Keeps the initial bundle small for tree-shakable imports.
-   */
   registerLazyModule<T>(
     name: string,
     factory: () =>
@@ -825,22 +688,15 @@ export class MiniAppSdk implements MiniAppSdkInterface {
     );
   }
 
-  /** Retrieves a module registered via `registerModule()` (or any built-in module, by its namespace name). */
   getModule<T>(name: string): T | undefined {
     return this.registry.get<T>(name);
   }
 
-  /** Async variant that resolves lazy factories (`registerLazyModule`). */
   async getModuleAsync<T>(name: string): Promise<T | undefined> {
     return this.registry.getAsync<T>(name, this.rpc);
   }
 
-  /**
-   * Returns a previously registered instance by `miniAppId`, or the most
-   * recently created one when no id is given. Prefer this over directly
-   * reading `window.__GSA_SDK__`.
-   */
-  static getInstance(miniAppId?: string): MiniAppSdk | undefined {
+  static getInstance(miniAppId?: string): SewaPlatformSdk | undefined {
     return getRegistryInstance(miniAppId);
   }
 }

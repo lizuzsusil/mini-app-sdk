@@ -2,10 +2,6 @@ import type { PlatformMessage } from "../protocol";
 import { isValidPlatformMessage } from "../protocol";
 import type { Transport, TransportDebugInfo } from "./transport";
 
-/**
- * Transport over MessagePort (Web Worker, DedicatedWorker, or iframe MessageChannel).
- * Suitable for off-main-thread hosts or multi-tab coordination.
- */
 export class MessagePortTransport implements Transport {
   private readonly port: MessagePort;
   private onMessageCallback: ((msg: PlatformMessage) => void) | null = null;
@@ -18,7 +14,6 @@ export class MessagePortTransport implements Transport {
   start(onMessage: (message: PlatformMessage) => void): void {
     this.onMessageCallback = onMessage;
     this.port.addEventListener("message", this.handleMessage as EventListener);
-    // MessagePort requires explicit start() in some implementations.
     if (
       typeof (this.port as unknown as { start?: () => void }).start ===
       "function"

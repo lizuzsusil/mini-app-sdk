@@ -364,7 +364,6 @@ describe("RpcClient", () => {
       ),
     );
 
-    // the incompatible-version response is dropped, so the request still times out
     await expect(promise).rejects.toBeInstanceOf(TimeoutError);
   });
 
@@ -458,7 +457,7 @@ describe("RpcClient debug introspection", () => {
   it("exposes the SDK version and transport debug info", () => {
     const transport = new FakeTransport();
     const client = makeClient(transport);
-    // RPC_CLIENT_SDK_VERSION is generated from package.json by pretest/prebuild.
+  
     expect(client.getSdkVersion()).toBe(RPC_CLIENT_SDK_VERSION);
     expect(client.getTransportDebugInfo().started).toBe(false);
 

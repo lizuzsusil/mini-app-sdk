@@ -1,3 +1,3 @@
 export * from "./instance-registry";
-export type { MiniAppSdkDependencies, SdkPlugin } from "./MiniAppSdk";
-export { MiniAppSdk } from "./MiniAppSdk";
+export type { SdkPlugin, SewaPlatformSdkDependencies } from "./SewaPlatformSdk";
+export { SewaPlatformSdk } from "./SewaPlatformSdk";

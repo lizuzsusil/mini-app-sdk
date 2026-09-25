@@ -1,11 +1,11 @@
 import { SdkError } from "../errors";
-import type { MiniAppSdkOptions } from "./sdk.types";
+import type { SewaPlatformSdkOptions } from "./sdk.types";
 
-export function validateSdkOptions(options: MiniAppSdkOptions): void {
+export function validateSdkOptions(options: SewaPlatformSdkOptions): void {
   if (!options || typeof options !== "object") {
     throw new SdkError({
       code: "INVALID_OPTIONS",
-      message: "MiniAppSdkOptions must be an object",
+      message: "SewaPlatformSdkOptions must be an object",
       details: { received: String(options) },
     });
   }
@@ -22,7 +22,7 @@ export function validateSdkOptions(options: MiniAppSdkOptions): void {
     });
   }
   const checkPositive = (
-    name: keyof MiniAppSdkOptions,
+    name: keyof SewaPlatformSdkOptions,
     value: unknown,
     allowZero = false,
   ): void => {

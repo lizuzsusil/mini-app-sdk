@@ -1,11 +1,5 @@
 import { SdkError } from "./sdk-error";
 
-/**
- * Raised when a request (or the handshake) does not receive a matching
- * response within the configured timeout. Timeouts are retryable by
- * default, since the most common cause is a transient host delay rather
- * than a permanent failure.
- */
 export class TimeoutError extends SdkError {
   constructor(params: {
     namespace: string;

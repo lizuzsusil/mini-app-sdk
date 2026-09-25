@@ -116,10 +116,8 @@ describe("MetricsRecorder", () => {
     }
 
     const metrics = recorder.snapshot().byAction["auth.getUser"]!;
-    // The three most recent durations are 3, 4, 5.
     expect(metrics.percentiles.p50Ms).toBe(4);
     expect(metrics.percentiles.p99Ms).toBe(5);
-    // Counters remain cumulative and are unaffected by the window bound.
     expect(metrics.count).toBe(5);
   });
 
@@ -132,9 +130,7 @@ describe("MetricsRecorder", () => {
       recorder.recordSuccess("auth", "getUser", 200);
 
       const metrics = recorder.snapshot().byAction["auth.getUser"]!;
-      // The 10ms sample aged out; only the 200ms one remains.
       expect(metrics.percentiles.p50Ms).toBe(200);
-      // Counters still count both.
       expect(metrics.count).toBe(2);
       expect(metrics.averageDurationMs).toBe(105);
     } finally {

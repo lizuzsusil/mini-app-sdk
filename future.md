@@ -31,7 +31,7 @@
 
 ## 1. Executive Summary
 
-**What the SDK gets right today:** Clean composition root `src/client/MiniAppSdk.ts:106`, narrow `Transport` abstraction `src/transport/transport.ts:17`, deterministic `ModuleRegistry` `src/modules/module-registry.ts:19`, typed `PlatformMessage` envelope `src/protocol/message.types.ts:32`, jittered exponential backoff `src/utils/backoff.ts:28`, capability negotiation in `RpcClient.handshake()` `src/rpc/rpc-client.ts:261`, and mature quality gates (api-extractor `api-extractor.json:2`, CI `.github/workflows/ci.yml`, size budget `scripts/check-size.mjs`, source maps).
+**What the SDK gets right today:** Clean composition root `src/client/SewaPlatformSdk.ts:106`, narrow `Transport` abstraction `src/transport/transport.ts:17`, deterministic `ModuleRegistry` `src/modules/module-registry.ts:19`, typed `PlatformMessage` envelope `src/protocol/message.types.ts:32`, jittered exponential backoff `src/utils/backoff.ts:28`, capability negotiation in `RpcClient.handshake()` `src/rpc/rpc-client.ts:261`, and mature quality gates (api-extractor `api-extractor.json:2`, CI `.github/workflows/ci.yml`, size budget `scripts/check-size.mjs`, source maps).
 
 **Where it must evolve:** `RpcClient` is a 1,152-line god object mixing correlation, retry, heartbeat, streaming, and events `src/rpc/rpc-client.ts:140`. The wire protocol is pinned to `postMessage` JSON + major-only compat `src/protocol/message-validator.ts:149`. Module surface has inconsistencies (`ai` vs `ChatModule`, `http.getStream` type masquerade `src/modules/http.module.ts:103`). Security is origin-pinning only with a `CustomEvent` bypass `src/transport/default-transport.ts:84`. Metrics/observability are in-memory only `src/observability/metrics-recorder.ts:64`. Tests are unit-only; no host mock, contract, or compat matrix.
 
@@ -46,17 +46,17 @@
 ```
 mini-app code
   │
-  ├─ MiniAppSdk (composition root) ── ModuleRegistry ── {auth, permissions, flags, config, navigation, platform, device, api, http, ai, appearance, notifications, links}
+  ├─ SewaPlatformSdk (composition root) ── ModuleRegistry ── {auth, permissions, flags, config, navigation, platform, device, api, http, ai, appearance, notifications, links}
   │     │
   │     └─ RpcClient ─── MetricsRecorder, Tracer (noopTracer), Middleware chain
   │            │
   │            └─ Transport (DefaultTransport: window.parent.postMessage + CustomEvent gov-platform-event)
   │
-  └─ cdn.ts IIFE (reads window.__GSA_SDK__ as MiniAppSdkOptions, overwrites with instance)
-  └─ index.ts helpers (activeInstance singleton via createMiniAppSdk/getMiniAppSdk/initMiniAppSdk)
+  └─ cdn.ts IIFE (reads window.__SEWA_SDK__ as SewaPlatformSdkOptions, overwrites with instance)
+  └─ index.ts helpers (activeInstance singleton via createSewaPlatformSdk/getSewaPlatformSdk/initSewaPlatformSdk)
 ```
 
-**Message kinds:** `request|response|event|handshake|stream` `src/protocol/message.types.ts:7`. Handshake negotiates `protocolVersion` + `capabilities: string[]` `src/protocol/message.types.ts:62`. Appearance hydrates via `platform.getType` hint fallback to `appearance.getTheme/Locale` with 1200 ms budget `src/client/MiniAppSdk.ts:91`.
+**Message kinds:** `request|response|event|handshake|stream` `src/protocol/message.types.ts:7`. Handshake negotiates `protocolVersion` + `capabilities: string[]` `src/protocol/message.types.ts:62`. Appearance hydrates via `platform.getType` hint fallback to `appearance.getTheme/Locale` with 1200 ms budget `src/client/SewaPlatformSdk.ts:91`.
 
 ### 2.2 Verified Strengths
 
@@ -71,9 +71,9 @@ mini-app code
 |------|----------|-------------|
 | God object RpcClient | `src/rpc/rpc-client.ts:140` | Change amplification, hard to test reconnect/heartbeat isolation |
 | Dual singletons | `src/index.ts:153` + `src/cdn.ts:42` | Two “global instance” stories; confusion for SSR/testing |
-| Duplicate type definitions | `src/types/common.types.ts:58` vs `@lizuz/mini-app-types` | Drift risk noted in `APPEARANCE.md:224` |
+| Duplicate type definitions | `src/types/common.types.ts:58` vs `sewa-platform-types` | Drift risk noted in `APPEARANCE.md:224` |
 | Silent validator drops | `src/protocol/message-validator.ts:47` + `src/rpc/rpc-client.ts:1068` | Invalid host messages time out with no log unless devMode |
-| Eager module build | `src/client/MiniAppSdk.ts:198` | No lazy / code-split per mini-app feature slice |
+| Eager module build | `src/client/SewaPlatformSdk.ts:198` | No lazy / code-split per mini-app feature slice |
 | Bidirectional events lack schema | `src/constants/namespaces.constants.ts:149` | Typos fail silently; no versioned event payloads |
 
 ---
@@ -95,19 +95,19 @@ mini-app code
 
 #### A2 — Unify global singleton story
 
-* **Why:** `activeInstance` in `src/index.ts:153` and `window.__GSA_SDK__` in `src/cdn.ts:20` / `src/client/MiniAppSdk.ts:248` serve overlapping “one mini app per tab” needs with different lifecycles. SSR and tests must mock `window`.
+* **Why:** `activeInstance` in `src/index.ts:153` and `window.__SEWA_SDK__` in `src/cdn.ts:20` / `src/client/SewaPlatformSdk.ts:248` serve overlapping “one mini app per tab” needs with different lifecycles. SSR and tests must mock `window`.
 * **Problem solved:** Eliminates “which global am I reading?” bugs; enables Worker/SSR usage where `window` is absent.
 * **Impact:** Predictable instance lookup, easier testing with injected globals.
-* **Implementation:** Introduce `src/client/instance-registry.ts` with `setActiveInstance`/`getActiveInstance` keyed by `miniAppId`; `cdn.ts` and `index.ts` both delegate. Add `MiniAppSdk.getInstance(miniAppId?)` static accessor. Keep `getMiniAppSdk()` as alias, mark alias `@deprecated`.
-* **Risks:** Existing consumers reading `window.__GSA_SDK__` directly keep working — registry writes to both keys during transition.
+* **Implementation:** Introduce `src/client/instance-registry.ts` with `setActiveInstance`/`getActiveInstance` keyed by `miniAppId`; `cdn.ts` and `index.ts` both delegate. Add `SewaPlatformSdk.getInstance(miniAppId?)` static accessor. Keep `getSewaPlatformSdk()` as alias, mark alias `@deprecated`.
+* **Risks:** Existing consumers reading `window.__SEWA_SDK__` directly keep working — registry writes to both keys during transition.
 * **Compat:** Additive; deprecate old getter over two minors.
 
 #### A3 — Consolidate type sources
 
-* **Why:** `PlatformTypeLiteral`, `AppearanceType`, `PlatformTypeResponse` defined locally `src/types/common.types.ts:58` and in `@lizuz/mini-app-types`. `src/client/MiniAppSdk.ts:55` imports package types while `src/modules/platform.module.ts` imports local — compiles only because they happen to match (`APPEARANCE.md:224`).
+* **Why:** `PlatformTypeLiteral`, `AppearanceType`, `PlatformTypeResponse` defined locally `src/types/common.types.ts:58` and in `sewa-platform-types`. `src/client/SewaPlatformSdk.ts:55` imports package types while `src/modules/platform.module.ts` imports local — compiles only because they happen to match (`APPEARANCE.md:224`).
 * **Problem solved:** Prevents subtle drift (e.g., adding a platform breaks only one import site).
 * **Impact:** Single source of truth, versioned via package.
-* **Implementation:** Move `AppearanceType`/`PlatformTypeResponse` to `@lizuz/mini-app-types` (already planned in `APPEARANCE.md:220`), re-export locally for one release, then delete locals. Add `scripts/check-versions.mjs` extension to fail if local re-export diverges.
+* **Implementation:** Move `AppearanceType`/`PlatformTypeResponse` to `sewa-platform-types` (already planned in `APPEARANCE.md:220`), re-export locally for one release, then delete locals. Add `scripts/check-versions.mjs` extension to fail if local re-export diverges.
 * **Risks:** Requires coordinated publish of `mini-app-types`; pin SDK peer range `^1.0.x` and document migration.
 * **Compat:** Re-export keeps import paths working; removal after min 6 months.
 
@@ -153,7 +153,7 @@ mini-app code
 
 #### F4 — SSR / Worker / Edge compatibility
 
-* **Why:** `DefaultTransport` throws if `window` missing `src/transport/default-transport.ts:61`; `HostDescriptor` reads `window.__GSA_HOST_DESCRIPTOR__` `src/client/MiniAppSdk.ts:155`.
+* **Why:** `DefaultTransport` throws if `window` missing `src/transport/default-transport.ts:61`; `HostDescriptor` reads `window.__GSA_HOST_DESCRIPTOR__` `src/client/SewaPlatformSdk.ts:155`.
 * **Problem solved:** Next.js App Router, Service Workers, Web Workers.
 * **Impact:** SDK usable in SSR prefetch and off-main-thread contexts.
 * **Implementation:** Provide `WorkerTransport`, `SsrNoopTransport`; move `window` access behind `globalThis` abstraction `src/transport/env.ts`. `hostDescriptor` resolution tries `globalThis` then env var.
@@ -166,7 +166,7 @@ mini-app code
 
 #### E1 — Normalize naming & fix type masquerade
 
-* **Why:** Public surface exposes `sdk.ai: ChatSdkModule` (`src/client/MiniAppSdk.ts:123`) but module is chat — confusing. `http.getStream` returns `Promise<T>` cast from `StreamBuilder` `src/modules/http.module.ts:103` — breaks `await sdk.http.getStream(...)` expectations.
+* **Why:** Public surface exposes `sdk.ai: ChatSdkModule` (`src/client/SewaPlatformSdk.ts:123`) but module is chat — confusing. `http.getStream` returns `Promise<T>` cast from `StreamBuilder` `src/modules/http.module.ts:103` — breaks `await sdk.http.getStream(...)` expectations.
 * **Problem solved:** Discoverability, type safety.
 * **Impact:** Fewer type assertions in consumer code.
 * **Implementation:** Alias `sdk.chat` alongside `sdk.ai` (keep `ai` as deprecated getter). Fix `getStream` to return `Promise<StreamBuilder>`; overload `stream` correctly. Change is `api-extractor` break → minor deprecation, major removal.
@@ -175,7 +175,7 @@ mini-app code
 
 #### E2 — First-class async event helpers & AbortSignal for subscriptions
 
-* **Why:** `sdk.on(event, handler)` returns `unsubscribe` `src/client/MiniAppSdk.ts:413` but no `once(event)` promise or `for await` iterable. No way to tie subscription lifetime to component mount without manual cleanup.
+* **Why:** `sdk.on(event, handler)` returns `unsubscribe` `src/client/SewaPlatformSdk.ts:413` but no `once(event)` promise or `for await` iterable. No way to tie subscription lifetime to component mount without manual cleanup.
 * **Problem solved:** Framework hooks (`useEffect` + `AbortSignal`) and `for await (const evt of sdk.events('x'))` patterns.
 * **Impact:** Less boilerplate, fewer leak bugs.
 * **Implementation:** Add `sdk.once(event, {signal})`, `sdk.events(event, {signal}) : AsyncIterable<T>`, and `on(event, handler, {signal})` overload where `signal.abort()` auto-unsubscribes. Implemented atop existing `eventHandlers` map `src/rpc/rpc-client.ts:152`.
@@ -184,10 +184,10 @@ mini-app code
 
 #### E3 — Validation & fluent builder for options
 
-* **Why:** `MiniAppSdkOptions` allows any timeout/retry combo `src/types/sdk.types.ts:175`; invalid `targetOrigin` or negative `retryAttempts` fails late.
+* **Why:** `SewaPlatformSdkOptions` allows any timeout/retry combo `src/types/sdk.types.ts:175`; invalid `targetOrigin` or negative `retryAttempts` fails late.
 * **Problem solved:** Fail fast with actionable `SdkError` at construction.
 * **Impact:** Host integration errors caught in dev, not on first request timeout.
-* **Implementation:** Add `validateSdkOptions(options)` called in `MiniAppSdk` ctor. Provide `createSdkOptions({...}).validate().build()` builder for discoverability.
+* **Implementation:** Add `validateSdkOptions(options)` called in `SewaPlatformSdk` ctor. Provide `createSdkOptions({...}).validate().build()` builder for discoverability.
 * **Risks:** Strict validation may reject previously tolerant inputs — default to warning in first minor, error in next.
 * **Compat:** Validation error code `INVALID_OPTIONS` additive; previously invalid configs were already buggy.
 
@@ -233,14 +233,14 @@ mini-app code
 
 #### P1 — Formal Plugin interface (beyond registerModule)
 
-* **Why:** `registerModule` `src/client/MiniAppSdk.ts:487` + `ModuleRegistry` `src/modules/module-registry.ts:28` allow a factory `(rpc)=>T` but no lifecycle, no access to events/metrics/logger, no ordering, no cleanup.
+* **Why:** `registerModule` `src/client/SewaPlatformSdk.ts:487` + `ModuleRegistry` `src/modules/module-registry.ts:28` allow a factory `(rpc)=>T` but no lifecycle, no access to events/metrics/logger, no ordering, no cleanup.
 * **Problem solved:** Auth-token refresh, cache, offline queue all want to wrap requests *and* listen to events *and* hook `initialize`/`destroy`.
 * **Impact:** Hosts can compose behavior without forking SDK.
 * **Implementation:**
   ```ts
   interface SdkPlugin {
     name: string;
-    install(ctx: { sdk: MiniAppSdk; rpc: RpcClient; logger: Logger }): void | Promise<void>;
+    install(ctx: { sdk: SewaPlatformSdk; rpc: RpcClient; logger: Logger }): void | Promise<void>;
     onInitialize?(): Promise<void>;
     onDestroy?(): void;
   }
@@ -252,7 +252,7 @@ mini-app code
 
 #### P2 — Lazy & tree-shakable modules
 
-* **Why:** All 11 namespaces eagerly built `src/client/MiniAppSdk.ts:186`; a mini app using only `auth` + `storage` ships dead code.
+* **Why:** All 11 namespaces eagerly built `src/client/SewaPlatformSdk.ts:186`; a mini app using only `auth` + `storage` ships dead code.
 * **Problem solved:** Smaller bundles, faster cold start.
 * **Impact:** Import cost proportional to usage.
 * **Implementation:** Change `ModuleRegistry` to support `registerLazy(name, () => import('./device.module'))`; build on first `get`. Re-export per-module entry points `exports["./device"]` in `package.json:11`. CDN IIFE stays monolithic (one tab) but lib build becomes tree-shakable.
@@ -388,7 +388,7 @@ mini-app code
 #### T1 — Layered test pyramid
 
 * **Unit (existing, strengthen):** Cover `message-validator` fuzz (property-based: random strings must not pass), `backoff` jitter distribution `src/utils/backoff.ts:35`, `ModuleRegistry` idempotency, `StreamBuilder` out-of-order delivery `src/stream/stream-builder.ts:57`, `DefaultTransport` origin pinning.
-* **Integration (new):** `MockHost` + `MockTransport` harness (`src/testing/mock-host.ts`) that speaks real `PlatformMessage` / `HandshakePayload`. Tests `MiniAppSdk.initialize()` happy path, appearance hint vs hydration fallback (`APPEARANCE.md:30`), heartbeat reconnect, streaming.
+* **Integration (new):** `MockHost` + `MockTransport` harness (`src/testing/mock-host.ts`) that speaks real `PlatformMessage` / `HandshakePayload`. Tests `SewaPlatformSdk.initialize()` happy path, appearance hint vs hydration fallback (`APPEARANCE.md:30`), heartbeat reconnect, streaming.
 * **Contract (new):** Pact-style consumer tests generated from `etc/sewa-sdk.api.md` + `mini-app-types` — fail if SDK sends payload host doesn’t expect.
 * **Compatibility (new):** Matrix workflow `.github/workflows/compat.yml` running SDK `1.0.x` against host mocks for `1.0`, `1.1-alpha`, `2.0-alpha`; major-only compat `src/protocol/message-validator.ts:149` exercised.
 * **Regression / a11y / perf (new):** `vitest --run --coverage --branchThreshold 85` gate; size check `scripts/check-size.mjs` already 30 kB; add latency benchmark `scripts/bench.mjs` for p50/p99 of `request` via metrics.
@@ -458,7 +458,7 @@ mini-app code
 
 #### FUT4 — Cross-mini-app coordination
 
-* **Why:** `emit` `src/client/MiniAppSdk.ts:442` publishes to shell bus; no isolated mini-app→mini-app channel (intentional). Future shells may want scoped coordination (e.g., shared cart).
+* **Why:** `emit` `src/client/SewaPlatformSdk.ts:442` publishes to shell bus; no isolated mini-app→mini-app channel (intentional). Future shells may want scoped coordination (e.g., shared cart).
 * **Problem solved:** Controlled inter-mini-app messaging.
 * **Impact:** Ecosystem composability.
 * **Implementation:** Host-scoped `scope: string` in `HandshakePayload`; `sdk.emit(scope:event)` gated by host `scopes` capability. SDK validates scope locally.
@@ -578,7 +578,7 @@ Roadmap items are **independent** — each lands in its own PR. Priority = impac
 | Mechanism | Example | Window |
 |-----------|---------|--------|
 | Additive field/method | `metrics.durationsWindowMs`, `sdk.chat` alias | Patch/minor, immediate |
-| Deprecated alias | `sdk.ai` → `sdk.chat`, `getMiniAppSdk()` → `getInstance()` | 2 minors with `devMode` warning, remove in major |
+| Deprecated alias | `sdk.ai` → `sdk.chat`, `getSewaPlatformSdk()` → `getInstance()` | 2 minors with `devMode` warning, remove in major |
 | Capability gate | `batch`, `binary`, `ai.tools` | Minor, falls back if host omits capability |
 | Codemod | `scripts/codemods/ai-to-chat.ts` | Ship with deprecation minor |
 
@@ -603,7 +603,7 @@ No wire field is renamed; `PlatformMessage.channel` `src/constants/protocol.cons
 
 ### D. File Map for Implementers
 
-* Composition root: `src/client/MiniAppSdk.ts:106` / `src/index.ts:153` / `src/cdn.ts:1`
+* Composition root: `src/client/SewaPlatformSdk.ts:106` / `src/index.ts:153` / `src/cdn.ts:1`
 * RPC core to split: `src/rpc/rpc-client.ts:140` / `src/rpc/middleware.ts:34`
 * Transport boundary: `src/transport/default-transport.ts:43` / `src/transport/transport.ts:17`
 * Protocol: `src/protocol/message.types.ts:32` / `src/protocol/message-validator.ts:47` / `src/protocol/message-factory.ts:22`

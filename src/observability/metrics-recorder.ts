@@ -48,19 +48,6 @@ function computePercentiles(samples: DurationSample[]): DurationPercentiles {
   };
 }
 
-/**
- * Records what happens to every request that passes through `RpcClient`,
- * broken down per `namespace.action`. This is deliberately in-memory,
- * process-local, and answers "what has this SDK instance seen so far", not
- * a long-term metrics store. A host or mini app that wants durable metrics
- * reads a snapshot periodically (via `sdk.getMetrics()`) and ships it
- * wherever it needs to go; `MetricsRecorder` itself never makes a network
- * call.
- *
- * Counters are cumulative, but latency percentiles come from a bounded
- * window of recent durations (see `RpcMetricsOptions`) so long-running
- * mini apps stay memory-bounded and the p99 reflects recent behavior.
- */
 export class MetricsRecorder {
   private readonly maxDurationEntries: number;
   private readonly durationsWindowMs: number | undefined;
@@ -145,9 +132,7 @@ export class MetricsRecorder {
 
     try {
       this.onSnapshot?.(snapshot);
-    } catch {
-      // A host's snapshot hook must never break metric reads.
-    }
+    } catch {}
 
     return snapshot;
   }
@@ -169,14 +154,12 @@ export class MetricsRecorder {
     this.durationSamples.set(key, samples);
   }
 
-  /** The bounded, age-windowed duration samples for one action. */
   private samplesWithinWindow(key: string, now: number): DurationSample[] {
     const samples = this.durationSamples.get(key);
     if (!samples) return [];
     if (this.durationsWindowMs === undefined) return samples;
     const cutoff = now - this.durationsWindowMs;
     const window = samples.filter((sample) => sample.at >= cutoff);
-    // Opportunistically drop aged-out samples so the array stays tight.
     if (window.length !== samples.length) this.durationSamples.set(key, window);
     return window;
   }

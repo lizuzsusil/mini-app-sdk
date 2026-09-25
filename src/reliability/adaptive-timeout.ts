@@ -1,10 +1,5 @@
 import type { RpcMetricsSnapshot } from "../observability";
 
-/**
- * EMA-based adaptive timeout. Consumes metrics snapshots and proposes a
- * timeout as `p95 * factor` clamped between min/max. Opt-in via
- * `reliability.adaptiveTimeout`.
- */
 export class AdaptiveTimeout {
   private emaP95 = 0;
   private readonly alpha: number;

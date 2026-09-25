@@ -33,15 +33,15 @@ Implemented:
   (`src/observability/metrics-recorder.ts`, `src/observability/metrics.types.ts`,
   `src/rpc/rpc-client.ts`).
 - **2.2 Debug snapshot** — `sdk.debug.snapshot()` returning a serializable view
-  of the instance (`src/client/MiniAppSdk.ts`, `src/rpc/rpc-client.ts`).
-- **2.3 Dev-mode capability warnings** — `MiniAppSdkOptions.devMode` plus a
+  of the instance (`src/client/SewaPlatformSdk.ts`, `src/rpc/rpc-client.ts`).
+- **2.3 Dev-mode capability warnings** — `SewaPlatformSdkOptions.devMode` plus a
   one-per-`namespace.action` warning when a request targets a domain namespace
   the host didn't negotiate (`src/rpc/rpc-client.ts`).
 - **2.4 Logging: redaction and level from options** — `ConsoleLogger` gains a
   `redact` option (`Set<string>` or predicate) that masks sensitive context
-  keys, and `MiniAppSdkOptions.logLevel` wires up the built-in `ConsoleLogger`
+  keys, and `SewaPlatformSdkOptions.logLevel` wires up the built-in `ConsoleLogger`
   without custom dependencies (`src/logging/console-logger.ts`,
-  `src/types/sdk.types.ts`, `src/client/MiniAppSdk.ts`).
+  `src/types/sdk.types.ts`, `src/client/SewaPlatformSdk.ts`).
 - **3.1 Storage: JSON values, TTL, scoped keys** — `getJson`/`setJson`,
   `ttlMs` option, and `scoped(prefix)` (`src/modules/storage.module.ts`).
 - **1.3 Event replay buffer** — `sdk.on(event, handler, { replay: true })` /
@@ -52,7 +52,7 @@ Implemented:
 - **1.4 Typed events** — `SdkEventMap` maps the known event names to their
   payload types; `sdk.on`/`sdk.emit` gain typed overloads while keeping the
   `string` fallback so host-defined events remain usable
-  (`src/types/common.types.ts`, `src/client/MiniAppSdk.ts`).
+  (`src/types/common.types.ts`, `src/client/SewaPlatformSdk.ts`).
 - **3.2 Feature-detect guards for device APIs** — `sdk.device.isSupported(action)`
   consults the negotiated capabilities (namespace-granular today) and rejects
   unknown action names, so mini apps branch instead of try/catching
@@ -72,12 +72,12 @@ Implemented:
 - **4.2 CI pipeline** — `.github/workflows/ci.yml` (checks) and
   `publish.yml` (tag-triggered npm publish).
 - **2.5 Pluggable tracing** — minimal `Tracer`/`Span` interfaces plus a
-  `noopTracer` default; `MiniAppSdkDependencies.tracer` bridges RPC spans into
+  `noopTracer` default; `SewaPlatformSdkDependencies.tracer` bridges RPC spans into
   a host's existing setup. The RPC layer starts `rpc.handshake` /
   `rpc.request` / `rpc.stream` spans annotated with `namespace`, `action`,
   `traceId`, and (on failure) `error`/`retryable`/`retryCount`
   (`src/observability/tracer.ts`, `src/observability/tracer.types.ts`,
-  `src/rpc/rpc-client.ts`, `src/client/MiniAppSdk.ts`).
+  `src/rpc/rpc-client.ts`, `src/client/SewaPlatformSdk.ts`).
 - **3.4 HTTP polish** — typed errors (`HttpClientError` for 4xx,
   `HttpServerError` for 5xx, the latter `retryable` so it participates in the
   retry loop via a new `RpcRequestOptions.mapPayload` hook), `getStream` for
@@ -111,15 +111,15 @@ Side fixes made while landing 4.2 (a green pipeline needs a green suite):
 
 Side fixes made while landing 4.1 (api-extractor needs a well-formed surface):
 
-- `@inheritdoc` → `{@inheritdoc}` in `src/client/MiniAppSdk.ts` (TSDoc inline
+- `@inheritdoc` → `{@inheritdoc}` in `src/client/SewaPlatformSdk.ts` (TSDoc inline
   tag syntax).
-- `SdkDebugSnapshot.platformType` now uses the `@lizuz/mini-app-types`
+- `SdkDebugSnapshot.platformType` now uses the `sewa-platform-types`
   `PlatformTypeLiteral` instead of the duplicate local copy in
   `src/types/common.types.ts`.
 - New root exports so every type referenced by a public signature resolves:
   `PlatformMessage`, `MessageType`, `PlatformError`, `Transport`,
   `TransportDebugInfo`, `Headers`, `Query`, the HTTP base request types,
-  `MiniAppSdkDependencies`, `ModuleFactory`, `RequestCancelledErrorOptions`,
+  `SewaPlatformSdkDependencies`, `ModuleFactory`, `RequestCancelledErrorOptions`,
   `SdkErrorOptions`, and `AppearanceType`/`PlatformTypes`/`PlatformTypeResponse`.
 
 ---
@@ -185,7 +185,7 @@ dead peer.
   state (re-fetch config/flags, re-subscribe to events).
 - Respect the existing capability negotiation — the reconnect should re-run
   `handshake()` and re-negotiate capabilities rather than assume them.
-- Keep it opt-in via `MiniAppSdkOptions` (e.g. `heartbeat: { intervalMs,
+- Keep it opt-in via `SewaPlatformSdkOptions` (e.g. `heartbeat: { intervalMs,
   timeoutMs, maxMissedPongs }`).
 
 **Files**
@@ -237,7 +237,7 @@ than "change only".
 **P2**
 
 `sdk.on(event: string, handler: EventHandler)` and `sdk.emit(event: string)` in
-`src/client/MiniAppSdk.ts` take raw strings and `unknown` payloads. Misspelled
+`src/client/SewaPlatformSdk.ts` take raw strings and `unknown` payloads. Misspelled
 event names fail silently.
 
 **Proposed shape**
@@ -262,7 +262,7 @@ event names fail silently.
 
 **Files**
 
-- `src/client/MiniAppSdk.ts`
+- `src/client/SewaPlatformSdk.ts`
 - `src/types/common.types.ts` (event map)
 - `src/constants/namespaces.constants.ts` (existing `NAVIGATION_EVENTS`)
 
@@ -334,12 +334,12 @@ logger and `getMetrics()`.
 
 - The `pendingRequests` view needs a small read-only accessor on `RpcClient`
   (currently the pending map is private).
-- Wire the loggers to accept `minLevel` from `MiniAppSdkOptions` so a debug
+- Wire the loggers to accept `minLevel` from `SewaPlatformSdkOptions` so a debug
   build can be turned up without a code change.
 
 **Files**
 
-- `src/client/MiniAppSdk.ts`
+- `src/client/SewaPlatformSdk.ts`
 - `src/rpc/rpc-client.ts` (pending-request accessor)
 - `src/types/sdk.types.ts`
 
@@ -385,23 +385,23 @@ Feature-detection mistakes surface during development instead of in prod.
 The `ConsoleLogger` (`src/logging/console-logger.ts`) logs context verbatim, so
 sensitive payloads (auth tokens, user PII in `auth.getUser` replies) can leak
 to console. Logging is also opt-in only via the constructor dependencies — not
-available through `MiniAppSdkOptions`.
+available through `SewaPlatformSdkOptions`.
 
 **Proposed shape**
 
 - Add a `redact` option to `ConsoleLogger` (a `Set<string>` of keys or a
   predicate) that masks matching fields in `context` before writing.
-- Add `logLevel` to `MiniAppSdkOptions` so a vendor can enable
+- Add `logLevel` to `SewaPlatformSdkOptions` so a vendor can enable
   `ConsoleLogger({ minLevel })` without a custom transport/dependency wiring.
 - Consider a `logger` factory option that already exists in
-  `MiniAppSdkDependencies` — this is about surfacing it through the public
+  `SewaPlatformSdkDependencies` — this is about surfacing it through the public
   options type.
 
 **Files**
 
 - `src/logging/console-logger.ts`
 - `src/types/sdk.types.ts`
-- `src/client/MiniAppSdk.ts`
+- `src/client/SewaPlatformSdk.ts`
 
 **Payoff**
 
@@ -422,7 +422,7 @@ into an existing tracer (OpenTelemetry, etc.).
 - Define a minimal `Tracer` interface (`startSpan(name, context) => Span` with
   `end()`, `setAttribute()`, and a hook to attach span context to outbound
   message `traceId`).
-- Accept an optional `tracer` in `MiniAppSdkDependencies`; default to a
+- Accept an optional `tracer` in `SewaPlatformSdkDependencies`; default to a
   no-op. RPC events (request started, response received, timeout, retry,
   middleware errors) feed the tracer.
 - Keep it additive — no behavior change when no tracer is supplied.
@@ -464,7 +464,7 @@ data hand-roll serialization and key namespacing.
 **Files**
 
 - `src/modules/storage.module.ts`
-- `src/types/storage.types.ts` (if types are local) / `@lizuz/mini-app-types`
+- `src/types/storage.types.ts` (if types are local) / `sewa-platform-types`
 - `src/constants/namespaces.constants.ts` (payload fields)
 
 **Payoff**
@@ -586,7 +586,7 @@ mirroring `device.module.ts` so they inherit retry/timeout/middleware for free.
 
 - New `src/modules/notifications.module.ts` / `src/modules/links.module.ts`
 - `src/constants/namespaces.constants.ts`
-- `src/client/MiniAppSdk.ts` (registration)
+- `src/client/SewaPlatformSdk.ts` (registration)
 
 **Payoff**
 

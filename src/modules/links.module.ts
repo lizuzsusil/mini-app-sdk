@@ -14,7 +14,8 @@ export function createLinksModule(rpc: RpcClient): LinksSdkModule {
         url,
         ...options,
       }),
-    onOpen: (handler) =>
+    // biome-ignore lint/suspicious/noExplicitAny: <handler type any>
+    onOpen: (handler: any) =>
       rpc.onEvent<LinksOpenedEvent>(LINKS_EVENTS.OPENED, handler),
   };
 }

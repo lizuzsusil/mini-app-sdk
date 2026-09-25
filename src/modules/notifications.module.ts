@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: <handler type any> */
 import { ACTIONS, NAMESPACES, NOTIFICATIONS_EVENTS } from "../constants";
 import type { RpcClient } from "../rpc";
 import type {
@@ -18,9 +19,9 @@ export function createNotificationsModule(
         ACTIONS.NOTIFICATIONS.REGISTER,
         options,
       ),
-    onToken: (handler) =>
+    onToken: (handler: any) =>
       rpc.onEvent<string>(NOTIFICATIONS_EVENTS.TOKEN, handler),
-    onOpen: (handler) =>
+    onOpen: (handler: any) =>
       rpc.onEvent<NotificationOpenEvent>(NOTIFICATIONS_EVENTS.OPENED, handler),
   };
 }

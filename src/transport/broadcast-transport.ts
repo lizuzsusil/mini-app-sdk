@@ -2,10 +2,6 @@ import type { PlatformMessage } from "../protocol";
 import { isValidPlatformMessage } from "../protocol";
 import type { Transport, TransportDebugInfo } from "./transport";
 
-/**
- * Transport over BroadcastChannel. Enables multi-tab host coordination
- * where several mini-apps share a single host channel.
- */
 export class BroadcastTransport implements Transport {
   private readonly channel: BroadcastChannel;
   private onMessageCallback: ((msg: PlatformMessage) => void) | null = null;

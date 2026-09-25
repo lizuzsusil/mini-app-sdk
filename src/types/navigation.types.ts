@@ -5,4 +5,4 @@ export type {
   NavigationSdkModule,
   NavigationState,
   NavigationTarget,
-} from "@lizuz/mini-app-types";
+} from "sewa-platform-types";

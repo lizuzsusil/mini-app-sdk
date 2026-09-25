@@ -3,12 +3,6 @@ import { SdkError } from "./sdk-error";
 import { TimeoutError } from "./timeout-error";
 import { TransportError } from "./transport-error";
 
-/**
- * Runtime type guards and helpers for the SDK error hierarchy.
- * All helpers are pure — they never throw — so they are safe to use
- * in `catch` branches and `onSnapshot` hooks.
- */
-
 export function isSdkError(error: unknown): error is SdkError {
   return error instanceof SdkError;
 }
@@ -50,10 +44,6 @@ export function isAuthError(error: unknown): boolean {
   return false;
 }
 
-/**
- * Narrow an `SdkError` (or any error carrying a `code`) to its code string.
- * Returns `undefined` for non-SdkError values.
- */
 export function getErrorCode(error: unknown): string | undefined {
   if (error instanceof SdkError) return error.code;
   if (

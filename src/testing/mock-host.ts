@@ -4,17 +4,6 @@ import { createMessage } from "../protocol";
 import type { Transport } from "../transport";
 import { FakeTransport } from "./fake-transport";
 
-/**
- * A minimal host harness for integration tests. Wraps a `FakeTransport`
- * and auto-answers the SDK handshake plus `platform.getType` so
- * `sdk.initialize()` can succeed without manual message crafting.
- *
- * ```ts
- * const host = new MockHost({ capabilities: ['auth','storage'] });
- * const sdk = new MiniAppSdk({ miniAppId: 'test' }, { transport: host.transport });
- * await sdk.initialize(); // handshake auto-answered
- * ```
- */
 export interface MockHostOptions {
   capabilities?: string[];
   protocolVersion?: string;
@@ -44,7 +33,6 @@ export class MockHost {
       autoRespondGetType: opts.autoRespondGetType ?? true,
     };
     this.transport = new FakeTransport();
-    // Intercept FakeTransport.send to capture outbound and optionally auto-respond.
     const origSend = this.transport.send.bind(this.transport);
     this.transport.send = (msg: PlatformMessage) => {
       origSend(msg);
@@ -75,7 +63,6 @@ export class MockHost {
         traceId: "test-trace",
       },
     );
-    // Events are addressed to miniAppId or "*"; use "*".
     this.transport.simulateIncoming(msg as unknown as PlatformMessage);
   }
 
@@ -103,7 +90,6 @@ export class MockHost {
             requestId: msg.requestId,
           },
         );
-        // handshake response type is "handshake" with same requestId
         (ack as unknown as Record<string, unknown>).type = "handshake";
         this.transport.simulateIncoming(ack as unknown as PlatformMessage);
       });
@@ -139,7 +125,6 @@ export class MockHost {
     }
   }
 
-  /** Transport adapter that can be passed directly to MiniAppSdk deps (alias). */
   get asTransport(): Transport {
     return this.transport as unknown as Transport;
   }

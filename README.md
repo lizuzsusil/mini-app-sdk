@@ -1,4 +1,4 @@
-# mini-app-sdk
+# sewa-platform-sdk
 
 Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication with the host shell.
 
@@ -13,9 +13,9 @@ Framework-agnostic Mini App SDK for vendor mini apps. Event-based communication 
 ## Installation
 
 ```bash
-pnpm add mini-app-sdk
+pnpm add sewa-platform-sdk
 # or
-npm install mini-app-sdk
+npm install sewa-platform-sdk
 ```
 
 Peer dependency (optional, for React integration):
@@ -28,16 +28,16 @@ pnpm add react@>=16.8.0
 ### Core SDK (Vanilla JS / Any Framework)
 
 ```typescript
-import { initMiniAppSdk, MiniAppSdkOptions } from 'mini-app-sdk';
+import { initSewaPlatformSdk, SewaPlatformSdkOptions } from 'sewa-platform-sdk';
 
-const options: MiniAppSdkOptions = {
+const options: SewaPlatformSdkOptions = {
   moduleId: 'my-mini-app',
   timeout: 10000,
   retryAttempts: 2,
   retryDelayMs: 500,
 };
 
-const sdk = await initMiniAppSdk(options);
+const sdk = await initSewaPlatformSdk(options);
 
 // Use any module
 const user = await sdk.auth.getUser();
@@ -56,11 +56,11 @@ sdk.destroy();
 ### CDN (script tag)
 
 For hosts that load the SDK from a CDN rather than via `npm`, set the config
-on `window.__GSA_SDK__` before the script tag runs:
+on `window.__SEWA_SDK__` before the script tag runs:
 
 ```html
 <script>
-  window.__GSA_SDK__ = {
+  window.__SEWA_SDK__ = {
     miniAppId: 'my-mini-app',
     timeout: 10000,
     targetOrigin: 'https://shell.example.com',
@@ -70,24 +70,24 @@ on `window.__GSA_SDK__` before the script tag runs:
 ```
 
 The bundle reads that config, then creates and initializes a single,
-page-wide instance and overwrites `window.__GSA_SDK__` with it (removed on
+page-wide instance and overwrites `window.__SEWA_SDK__` with it (removed on
 `destroy()`). One mini app per tab.
 
 ### React Integration
 
 ```tsx
-import { MiniAppSdkProvider, useMiniAppSdk, usePlatformUser } from 'mini-app-sdk/react';
+import { SewaPlatformSdkProvider, useSewaPlatformSdk, usePlatformUser } from 'sewa-platform-sdk/react';
 
 function App() {
   return (
-    <MiniAppSdkProvider moduleId="my-mini-app" fallback={<Loading />}>
+    <SewaPlatformSdkProvider moduleId="my-mini-app" fallback={<Loading />}>
       <Dashboard />
-    </MiniAppSdkProvider>
+    </SewaPlatformSdkProvider>
   );
 }
 
 function Dashboard() {
-  const sdk = useMiniAppSdk();
+  const sdk = useSewaPlatformSdk();
   const user = usePlatformUser();
 
   const handleNavigate = async () => {
@@ -127,7 +127,7 @@ function Dashboard() {
 All TypeScript types are exported:
 - `PlatformUser`, `NavigationTarget`, `NavigationState`
 - `DeviceLocationResult`, `DeviceCameraResult`, etc.
-- `MiniAppSdkInterface`, `MiniAppSdkOptions`
+- `SewaPlatformSdkInterface`, `SewaPlatformSdkOptions`
 - `SdkError` (error class with `code`, `retryable`, `details`)
 
 ## How It Works

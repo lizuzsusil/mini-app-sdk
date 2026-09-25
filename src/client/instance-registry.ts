@@ -1,23 +1,10 @@
-import type { MiniAppSdk } from "./MiniAppSdk";
+import type { SewaPlatformSdk } from "./SewaPlatformSdk";
 
-/**
- * Central registry for SDK instances. Unifies the two historical
- * “singletons”: `window.__GSA_SDK__` (used by the CDN IIFE `src/cdn.ts`)
- * and the module-scoped `activeInstance` in `src/index.ts`.
- *
- * - Instances are keyed by `miniAppId` so future multi-mini-app-per-tab
- *   scenarios remain possible.
- * - The registry mirrors the instance to `globalThis.__GSA_SDK__` (the
- *   CDN global) for backward compatibility — consumers reading
- *   `window.__GSA_SDK__` directly keep working during the transition.
- * - Safe for non-browser / SSR contexts where `window` / `globalThis` are
- *   unavailable or frozen.
- */
-const instances = new Map<string, MiniAppSdk>();
+const instances = new Map<string, SewaPlatformSdk>();
 
-const GLOBAL_KEY = "__GSA_SDK__";
+const GLOBAL_KEY = "__SEWA_SDK__";
 
-function writeGlobal(instance: MiniAppSdk | null): void {
+function writeGlobal(instance: SewaPlatformSdk | null): void {
   try {
     if (typeof globalThis === "undefined") return;
     const g = globalThis as unknown as Record<string, unknown>;
@@ -27,16 +14,16 @@ function writeGlobal(instance: MiniAppSdk | null): void {
       delete g[GLOBAL_KEY];
     }
   } catch {
-    // globalThis may be non-writable in some embedded runtimes — ignore.
+    // globalThis may be non-writable in some embedded runtimes. (ignore it)
   }
 }
 
-export function registerInstance(instance: MiniAppSdk): void {
+export function registerInstance(instance: SewaPlatformSdk): void {
   instances.set(instance.miniAppId, instance);
   writeGlobal(instance);
 }
 
-export function unregisterInstance(instance: MiniAppSdk): void {
+export function unregisterInstance(instance: SewaPlatformSdk): void {
   if (instances.get(instance.miniAppId) === instance) {
     instances.delete(instance.miniAppId);
   }
@@ -47,7 +34,6 @@ export function unregisterInstance(instance: MiniAppSdk): void {
         instance
     ) {
       writeGlobal(null);
-      // If other instances remain, expose the most recent one on the global.
       const vals = [...instances.values()];
       const last = vals[vals.length - 1];
       if (last) writeGlobal(last);
@@ -57,15 +43,14 @@ export function unregisterInstance(instance: MiniAppSdk): void {
   }
 }
 
-export function getInstance(miniAppId?: string): MiniAppSdk | undefined {
+export function getInstance(miniAppId?: string): SewaPlatformSdk | undefined {
   if (miniAppId) return instances.get(miniAppId);
-  // Return most recently registered when no key is given — matches legacy
-  // `getMiniAppSdk()` semantics.
+  // return the most recently registererd id when no other key is given
   const values = [...instances.values()];
   return values[values.length - 1];
 }
 
-export function getAllInstances(): readonly MiniAppSdk[] {
+export function getAllInstances(): readonly SewaPlatformSdk[] {
   return [...instances.values()];
 }
 

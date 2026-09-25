@@ -1,12 +1,9 @@
-/**
- * Re-export shared SDK surface types from the single source `@lizuz/mini-app-types`.
- * Local extensions that depend on SDK internals (RpcClient, Transport) are kept
- * here but shared shapes live in the package.
- */
+/** biome-ignore-all lint/suspicious/noExplicitAny: <any type> */
+
 import type {
-  MiniAppSdkInterface as NpmMiniAppSdkInterface,
+  SewaPlatformSdkInterface as NpmSewaPlatformSdkInterface,
   RpcRequestOptions,
-} from "@lizuz/mini-app-types";
+} from "sewa-platform-types";
 import type { ApiSdkModule } from "./api.types";
 
 export type {
@@ -16,27 +13,21 @@ export type {
   DiagnosticSeverity,
   HeartbeatOptions,
   HostDescriptor,
-  MiniAppSdkOptions,
   PendingRequestInfo,
   ReliabilityOptions,
   SdkDebug,
   SdkDebugSnapshot,
   SdkStatus,
-} from "@lizuz/mini-app-types";
+  SewaPlatformSdkOptions,
+} from "sewa-platform-types";
 
-/**
- * Local SDK surface — generic `api.request` (unary by default,
- * `stream: true` for chat/file streaming) is the only network module.
- * Backend-specific chat modules live in their mini apps, not in the SDK.
- */
-export interface MiniAppSdkInterface
+export interface SewaPlatformSdkInterface
   extends Omit<
-    NpmMiniAppSdkInterface,
+    NpmSewaPlatformSdkInterface,
     "api" | "http" | "gicChat" | "usePlugin" | "request"
   > {
   api: ApiSdkModule;
   usePlugin(plugin: SdkPlugin): Promise<void>;
-  /** Raw RPC — `request(namespace, action, payload?, options?)`. */
   request<T>(
     namespace: string,
     action: string,
@@ -48,10 +39,8 @@ export interface MiniAppSdkInterface
 export interface SdkPlugin {
   name: string;
   install(ctx: {
-    sdk: MiniAppSdkInterface;
-    // biome-ignore lint/suspicious/noExplicitAny: mirrors the shared plugin contract (rpc/logger are host-provided)
+    sdk: SewaPlatformSdkInterface;
     rpc: any;
-    // biome-ignore lint/suspicious/noExplicitAny: mirrors the shared plugin contract (rpc/logger are host-provided)
     logger: any;
   }): void | Promise<void>;
   onInitialize?(): Promise<void>;

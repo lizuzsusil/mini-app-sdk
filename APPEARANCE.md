@@ -27,7 +27,7 @@ both, and the mini app is unchanged.
 
 ### Resolution order
 
-`MiniAppSdk.runInitializeSequence()` resolves appearance in this order:
+`SewaPlatformSdk.runInitializeSequence()` resolves appearance in this order:
 
 1. **Hint on `getType`** — used when present, and the `appearance.*` round trips
    are skipped entirely.
@@ -124,7 +124,7 @@ field accepts a loose string or the full `ThemeState` / `LocaleState`.
 - `getLocale()` / `getTheme()` serve the store when the host hasn't negotiated
   the `appearance` namespace, so those calls don't reject on Flutter.
 
-### `src/client/MiniAppSdk.ts`
+### `src/client/SewaPlatformSdk.ts`
 
 - `getType` is requested as `PlatformTypeLiteral | PlatformTypeResponse`.
 - Appearance event subscription moved out of the capability check.
@@ -147,7 +147,7 @@ fallback for mini apps running an older SDK bundle, and serves explicit
 
 1. Inject `window.__GSA_HOST_DESCRIPTOR__`, then load `sewa-sdk.min.js` and call
    `window.getMiniAppBridge().createInstance({ miniAppId })` — that sets
-   `window.__GSA_SDK__`, which the mini app reads.
+   `window.__SEWA_SDK__`, which the mini app reads.
 2. Answer the handshake with an explicit `capabilities` list that **omits**
    `appearance`. If the field is absent entirely the SDK assumes full support,
    and an explicit `sdk.appearance.getLocale()` would then fire an RPC Flutter
@@ -215,11 +215,11 @@ missing.
 ## Follow-ups
 
 - `PlatformTypeResponse` / `AppearanceType` are a wire contract between the SDK
-  and the host, so they belong in `@lizuz/mini-app-types` once the shape has
+  and the host, so they belong in `sewa-platform-types` once the shape has
   settled against a real Flutter container. They are local to this repo for now
   to avoid blocking on a publish.
 - `src/types/common.types.ts` and `src/types/platform.types.ts` shadow
-  definitions of the same names in `@lizuz/mini-app-types`. `platform.module.ts`
-  imports the local ones while `MiniAppSdk.ts` imports the package ones; this
+  definitions of the same names in `sewa-platform-types`. `platform.module.ts`
+  imports the local ones while `SewaPlatformSdk.ts` imports the package ones; this
   compiles only because the definitions are currently identical. Worth
   consolidating when the types above are promoted.

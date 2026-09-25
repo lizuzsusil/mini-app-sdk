@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RpcClient } from "../rpc";
 import { ModuleRegistry } from "./module-registry";
 
-// The registry only ever passes `rpc` through to factories — it never calls
-// anything on it — so a typed-but-unused stand-in is enough here.
+
 const fakeRpc = {} as RpcClient;
 
 describe("ModuleRegistry", () => {

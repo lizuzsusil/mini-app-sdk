@@ -49,37 +49,13 @@ import { composeMiddleware } from "./middleware";
 
 export type EventHandler<TPayload = unknown> = (payload: TPayload) => void;
 
-/** Per-request control knobs passed to `request()`. */
 export interface RpcRequestOptions {
-  /**
-   * When provided, aborting the signal rejects the in-flight request (and any
-   * pending retries) with a `RequestCancelledError` — useful for unmounting
-   * screens or navigating away without waiting for the timeout.
-   */
   signal?: AbortSignal;
-  /**
-   * Optional transformation applied to the host's response **inside** the
-   * retry loop. Throwing from here — e.g. mapping an `HttpResult` carrying a
-   * 5xx `status` onto an `HttpServerError` — rejects the request and, when
-   * the thrown error is `retryable`, participates in the normal retry policy
-   * exactly like any other request failure.
-   */
   mapPayload?: (payload: unknown) => unknown;
-  /**
-   * Opt-in deduplication: when true (default for idempotent reads), concurrent
-   * identical requests within 50ms share the same underlying promise.
-   * Pass `false` for side-effect actions (e.g. `device.location`).
-   */
   dedupe?: boolean;
 }
 
-/** Per-stream control knobs passed to `sendStreamRequest()`. */
 export interface RpcStreamOptions {
-  /**
-   * When provided, aborting the signal cancels the stream (rejecting the
-   * `StreamBuilder` with a `RequestCancelledError`) and notifies the host to
-   * stop producing.
-   */
   signal?: AbortSignal;
 }
 
@@ -90,30 +66,17 @@ export interface RpcClientOptions {
   retryDelayMs?: number;
   maxRetryDelayMs?: number;
   logger?: Logger;
-  /**
-   * When true, warns once per `namespace.action` about requests to domain
-   * namespaces the host did not negotiate during the handshake. No-op when
-   * false (production). Defaults to false.
-   */
   devMode?: boolean;
-  /** Enables the optional heartbeat & reconnect (see `HeartbeatOptions`). */
   heartbeat?: HeartbeatOptions;
-  /** Tuning for the request metrics recorder (percentile window, export hook). */
   metrics?: RpcMetricsOptions;
-  /** Circuit breaker tuning. Disabled when undefined. */
   circuitBreaker?: CircuitBreakerOptions;
-  /** Adaptive timeout tuning. */
   adaptiveTimeout?: {
     enabled?: boolean;
     factor?: number;
     minMs?: number;
     maxMs?: number;
   };
-  /**
-   * Optional tracer for RPC observability. When omitted, a no-op tracer is
-   * used and behavior is unchanged. See `observability/tracer.types.ts` for
-   * the minimal `Tracer`/`Span` contract.
-   */
+
   tracer?: Tracer;
 }
 
@@ -123,11 +86,9 @@ interface PendingRequest {
   timer: ReturnType<typeof setTimeout>;
   namespace: string;
   action: string;
-  /** `Date.now()` when the request was dispatched, for debug snapshots. */
   startedAt: number;
 }
 
-/** Metadata the RPC layer keeps per active streamed request. */
 interface StreamRecord {
   builder: StreamBuilder;
   namespace: string;
@@ -142,13 +103,10 @@ const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_MISSED_PONGS = 2;
 
-/** How many recent payloads per event the replay buffer retains. */
 const EVENT_REPLAY_BUFFER_SIZE = 5;
 
-/** Deduplication window for idempotent requests (ms). */
 const DEDUPE_WINDOW_MS = 50;
 
-/** Actions that are safe to deduplicate (idempotent reads). */
 const DEDUPE_ALLOW = new Set([
   "auth.getUser",
   "auth.isAuthenticated",
@@ -165,17 +123,6 @@ const DEDUPE_ALLOW = new Set([
   "appearance.getTheme",
 ]);
 
-/**
- * Owns everything about *RPC semantics* as opposed to *message delivery*:
- * correlation ids, the pending-request map, timeout enforcement, retry
- * policy, the handshake sequence (including protocol version and
- * capability negotiation), and event subscription.
- *
- * `RpcClient` depends only on the `Transport` interface — it has no
- * knowledge of `postMessage`, `window`, or any other delivery mechanism.
- * SDK modules (`AuthModule`, `HttpModule`, ...) depend on `RpcClient`, not
- * on `Transport` directly.
- */
 export class RpcClient {
   private readonly miniAppId: string;
   private readonly timeout: number;
@@ -206,32 +153,16 @@ export class RpcClient {
   private readonly circuitBreaker: CircuitBreaker | null;
   private readonly adaptiveTimeout: AdaptiveTimeout | null;
 
-  /** Set while a reconnect (re-run of the handshake) is in progress. */
   private reconnectInProgress = false;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private heartbeatMissedPongs = 0;
-  /** Heartbeat pings awaiting a pong, keyed by requestId. */
   private readonly heartbeatPings = new Map<
     string,
     { onPong: () => void; timer: ReturnType<typeof setTimeout> }
   >();
 
-  /**
-   * Bounded per-event buffer of recent payloads, for `onEvent()` subscriptions
-   * that pass the `replay` option. New subscribers receive the buffered values
-   * immediately so a slow mount doesn't lose events that arrived before it
-   * subscribed.
-   */
   private readonly eventReplayBuffer = new Map<string, unknown[]>();
 
-  /**
-   * Namespaces the host confirmed support for during the handshake. `null`
-   * until `handshake()` resolves. Populated to `SDK_CAPABILITIES` verbatim
-   * when a host doesn't report its own capabilities at all (an
-   * not-yet-upgraded host), since the safest assumption in that case is
-   * "everything this SDK build knows how to ask for is fair game", which
-   * is exactly today's behavior for such a host.
-   */
   private negotiatedCapabilities: string[] | null = null;
   private negotiatedCapabilityVersions: Record<string, string> | null = null;
 
@@ -261,17 +192,17 @@ export class RpcClient {
       : null;
   }
 
-  /** Begin listening for inbound messages via the injected `Transport`. */
+  //initial start method for handle communication
+
   start(): void {
     if (this.started) return;
-    this.transport.start((message) => this.handleIncomingMessage(message));
+    this.transport.start((message: unknown) =>
+      this.handleIncomingMessage(message),
+    );
     this.started = true;
   }
 
-  /**
-   * Stop listening and reject every in-flight request. Safe to call
-   * multiple times and safe to call even if `start` was never called.
-   */
+  // stop method for handle communication disconnect
   stop(): void {
     this.transport.stop();
     this.started = false;
@@ -304,19 +235,6 @@ export class RpcClient {
     this.eventReplayBuffer.clear();
   }
 
-  /**
-   * Performs the initial handshake with the host: sends this SDK build's
-   * protocol version and capability list, and waits for the host's
-   * acknowledgement.
-   *
-   * A host that doesn't yet send an acknowledgement payload (an
-   * un-upgraded host that just echoes `{ status: 'ok' }`) completes the
-   * handshake exactly as before — every field on the ack is optional, and
-   * missing fields fall back to permissive defaults. A host that *does*
-   * report an incompatible protocol version, or that explicitly rejects
-   * the connection, causes this to reject with a `HandshakeError` instead
-   * of silently proceeding with a connection that won't actually work.
-   */
   async handshake(): Promise<void> {
     const span = this.tracer.startSpan("rpc.handshake", {
       miniAppId: this.miniAppId,
@@ -380,24 +298,10 @@ export class RpcClient {
     });
   }
 
-  /**
-   * Registers a middleware. Middlewares run in registration order (the
-   * first registered is outermost) and wrap the entire request, including
-   * its retry attempts — see `rpc/middleware.ts` for the execution model.
-   * Safe to call after `start()`; a middleware registered mid-session
-   * applies to every request made from that point on, not to ones already
-   * in flight.
-   */
   use(middleware: RpcMiddleware): void {
     this.middlewares.push(middleware);
   }
 
-  /**
-   * Registers an event interceptor that can transform or filter inbound
-   * events before they reach `onEvent` handlers. Return `false` to drop the
-   * event, or a new payload to transform it. Interceptors run in
-   * registration order.
-   */
   addEventInterceptor(
     interceptor: (event: string, payload: unknown) => unknown | false,
   ): () => void {
@@ -408,18 +312,6 @@ export class RpcClient {
     };
   }
 
-  /**
-   * Sends a request and resolves with the host's response payload. Passes
-   * through any registered middleware, then through the retry loop
-   * described on `executeWithRetry`. An optional `AbortSignal` in `options`
-   * cancels the request (including any queued retries) with a
-   * `RequestCancelledError` as soon as it fires.
-   *
-   * A span named `rpc.request` is started for the whole composed call (one
-   * span per logical request, wrapping the retry loop — same granularity as
-   * the middleware chain) and annotated with the namespace, action, and any
-   * terminal error.
-   */
   async request<T>(
     namespace: string,
     action: string,
@@ -438,7 +330,6 @@ export class RpcClient {
         platformError: { code: "CIRCUIT_OPEN", message: "Circuit open" },
       });
     }
-    // Deduplication: share promise for concurrent identical idempotent requests.
     const dedupeKey = `${namespace}.${action}:${JSON.stringify(payload ?? null)}`;
     const shouldDedupe =
       options?.dedupe !== false &&
@@ -511,12 +402,6 @@ export class RpcClient {
     return tracked;
   }
 
-  /**
-   * Batch variant: executes multiple requests. If host negotiated `batch`
-   * capability, sends a single `batch.execute` envelope; otherwise fans out
-   * in parallel (per-request retry/middleware still apply). Returns per-item
-   * `{ok, value|error}` to preserve partial success semantics.
-   */
   async batch(
     requests: Array<{
       namespace: string;
@@ -573,7 +458,7 @@ export class RpcClient {
     );
   }
 
-  /** Maps a namespace to the capability that gates it — identity by default. */
+  // get all the required capability
   private getRequiredCapability(namespace: string): string {
     return namespace;
   }
@@ -582,7 +467,6 @@ export class RpcClient {
     if (!this.negotiatedCapabilities) return;
     const required = this.getRequiredCapability(namespace);
     if (!(SDK_CAPABILITIES as readonly string[]).includes(required)) return;
-    // Core namespaces are always granted by host (see host/rpc/capabilities.ts CORE_CAPABILITIES) — don't gate them
     if (
       (
         [
@@ -603,13 +487,6 @@ export class RpcClient {
     });
   }
 
-  /**
-   * Dev-mode helper: once the handshake has completed, warn once per
-   * `namespace.action` when the namespace is a domain capability this SDK
-   * advertises but the host did not negotiate. Protocol-level namespaces
-   * (`event`, `handshake`) are excluded — hosts never negotiate them, so a
-   * warning would be noise. A no-op when `devMode` is off.
-   */
   private warnOnUnavailableCapability(namespace: string, action: string): void {
     if (!this.devMode) return;
     if (!this.negotiatedCapabilities) return;
@@ -638,14 +515,6 @@ export class RpcClient {
     );
   }
 
-  /**
-   * The actual retry loop: retryable failures (currently just
-   * `TimeoutError`) are retried up to `retryAttempts` times, waiting an
-   * exponentially increasing, jittered delay between attempts (see
-   * `utils/backoff.ts`) so a burst of mini apps recovering from the same
-   * host hiccup doesn't retry in lockstep. Every attempt — success or
-   * failure — is recorded into `metricsRecorder`.
-   */
   private async executeWithRetry<T>(
     namespace: string,
     action: string,
@@ -718,11 +587,6 @@ export class RpcClient {
     );
   }
 
-  /**
-   * Delays while watching an `AbortSignal`: aborts reject early with a
-   * `RequestCancelledError` instead of letting the caller wait out a backoff
-   * that no longer matters.
-   */
   private async abortAwareDelay(
     ms: number,
     namespace: string,
@@ -759,23 +623,7 @@ export class RpcClient {
     });
   }
 
-  /**
-   * Sends a request whose response the host streams back as a sequence of
-   * `stream` messages. Resolves with a `StreamBuilder` immediately — the
-   * first chunk may arrive before this promise settles — which callers
-   * consume via `builder.iterate()` (per-chunk) or `builder.waitUntilDone()`
-   * (whole-stream completion). See `stream/StreamBuilder.ts`.
-   *
-   * Streams deliberately bypass the middleware and retry machinery: a
-   * stream may already have produced output by the time a failure would be
-   * detected, so an automatic retry can't be spliced in safely. A timeout
-   * still applies, matching every other request.
-   *
-   * An optional `AbortSignal` in `options` cancels the stream: the builder
-   * rejects with a `RequestCancelledError` and the host is told to stop
-   * producing. A mini app can also cancel directly via `builder.cancel()`,
-   * which notifies the host the same way.
-   */
+  // stream based response request method
   async sendStreamRequest(
     namespace: string,
     action: string,
@@ -867,33 +715,16 @@ export class RpcClient {
     return builder;
   }
 
-  /**
-   * Explicitly cancels an active streamed request by its `requestId`,
-   * rejecting its builder and notifying the host to stop producing. No-op if
-   * the stream already settled. The RPC layer owns cancellation semantics —
-   * the `StreamBuilder` itself stays transport-agnostic.
-   */
   cancelStream(requestId: string): void {
     const record = this.streamConsumers.get(requestId);
     if (!record) return;
     this.cancelStreamBuilder(requestId);
   }
 
-  /**
-   * Rejects a stream's builder with the given error (defaulting to a
-   * `StreamCancelledError`), also firing the builder's `onCancel` hook so the
-   * host is told to stop. `onAbort` uses this for the signal path.
-   */
   private cancelStreamBuilder(requestId: string, error?: Error): void {
     this.streamConsumers.get(requestId)?.builder.cancel(error);
   }
 
-  /**
-   * Fire-and-forget host notification that a stream is being cancelled, so
-   * the host can stop generating chunks instead of streaming into the void.
-   * Scoped to the stream's own namespace (`api.cancel` for `api.request`
-   * streams) so no `http` namespace is involved.
-   */
   private notifyHostStreamCancelled(requestId: string): void {
     const record = this.streamConsumers.get(requestId);
     if (!record) return;
@@ -909,22 +740,6 @@ export class RpcClient {
     });
   }
 
-  /**
-   * Subscribes to a namespaced event. Returns an unsubscribe function.
-   *
-   * The first handler registered for a given event name triggers an
-   * `event.subscribe` request to the host, telling it this mini app now
-   * wants that event's data pushed to it — some hosts only start emitting
-   * an event once they've received this. The subscribe call is
-   * fire-and-forget: a host that doesn't require explicit subscription
-   * simply ignores it.
-   *
-   * With `{ replay: true }`, the handler is immediately invoked with the
-   * last few payloads this client has already seen for that event (a small
-   * bounded buffer, kept per event name), so a handler registered after the
-   * host started emitting still observes the most recent value rather than
-   * only future changes.
-   */
   onEvent<TPayload = unknown>(
     event: string,
     handler: EventHandler<TPayload>,
@@ -948,7 +763,6 @@ export class RpcClient {
     const handlers = this.eventHandlers.get(event);
     handlers?.add(handler as EventHandler);
 
-    // Bounded handler guard — warn in devMode when a single event accumulates many handlers.
     if (this.devMode && handlers && handlers.size > 20) {
       this.logger.warn(
         `[dev] "${event}" now has ${handlers.size} handlers — possible leak (subscribe without unsubscribe)`,
@@ -979,10 +793,6 @@ export class RpcClient {
     return unsubscribe;
   }
 
-  /**
-   * Records a payload into the bounded per-event replay buffer, dropping the
-   * oldest entry once `EVENT_REPLAY_BUFFER_SIZE` is exceeded.
-   */
   private bufferEvent(event: string, payload: unknown): void {
     const buffer = this.eventReplayBuffer.get(event) ?? [];
     buffer.push(payload);
@@ -994,11 +804,6 @@ export class RpcClient {
     return this.traceId;
   }
 
-  /**
-   * Namespaces the host confirmed support for. Returns an empty array
-   * before `handshake()` resolves — callers that need to feature-detect
-   * before `initialize()` completes should just wait for `initialize()`.
-   */
   getCapabilities(): readonly string[] {
     return this.negotiatedCapabilities ?? [];
   }
@@ -1015,20 +820,10 @@ export class RpcClient {
     return this.adaptiveTimeout?.propose() ?? null;
   }
 
-  /**
-   * A point-in-time snapshot of every request this client has made:
-   * totals plus a per-`namespace.action` breakdown of counts, timings,
-   * failures, timeouts, and retries. Safe to call at any time, including
-   * before `start()` (it just reports all zeros).
-   */
   getMetrics(): RpcMetricsSnapshot {
     return this.metricsRecorder.snapshot();
   }
 
-  /**
-   * A read-only view of every request currently awaiting a host reply, for
-   * `MiniAppSdk.debug.snapshot()`.
-   */
   getPendingRequests(): PendingRequestInfo[] {
     const now = Date.now();
     const result: PendingRequestInfo[] = [];
@@ -1043,25 +838,15 @@ export class RpcClient {
     return result;
   }
 
-  /** The SDK build version reported to the host during the handshake. */
+  //this gives const value for now.
   getSdkVersion(): string {
     return RPC_CLIENT_SDK_VERSION;
   }
 
-  /** Debug-time view of the transport, for `MiniAppSdk.debug.snapshot()`. */
   getTransportDebugInfo(): TransportDebugInfo {
     return this.transport.getDebugInfo?.() ?? { started: this.started };
   }
 
-  /**
-   * Dispatches a local (SDK-originated) event to subscribers without going
-   * through the transport or the host — used for connection-state
-   * notifications that the host itself cannot deliver because the link is
-   * down. Subscribers register exactly as they would for a host event:
-   * `sdk.on("connection.lost", …)`. Matching the host-event routing, the
-   * subscription fires as `event.subscribe` only when at least one handler
-   * exists, so first registering a listener marks the connection "live".
-   */
   private emitLocalEvent(event: string, payload: unknown): void {
     const intercepted = this.runEventInterceptors(event, payload);
     if (intercepted === false) return;
@@ -1126,11 +911,7 @@ export class RpcClient {
           this.heartbeatPings.delete(heartbeatId);
         }
       })
-      .catch(() => {
-        // The per-ping timer below already counted the miss; a request-level
-        // failure (timeout after retries, transport error) only means the
-        // host did not answer, which is what the counter records.
-      });
+      .catch(() => {});
 
     this.heartbeatPings.set(heartbeatId, {
       onPong: () => {
@@ -1250,6 +1031,7 @@ export class RpcClient {
     this.startHeartbeat();
   }
 
+  // method work when the mini app send request message to the host.
   private sendRequest<T>(
     namespace: string,
     action: string,
@@ -1367,9 +1149,6 @@ export class RpcClient {
     if (message.type === "response" || message.type === "handshake") {
       const pending = this.pending.get(message.requestId);
       if (!pending) {
-        // A streamed request is normally answered entirely with `stream`
-        // messages, but a host that refuses it up front may answer with a
-        // plain `response` carrying an error. Surface that to the stream.
         const stream = this.streamConsumers.get(message.requestId)?.builder;
         if (stream && message.error) {
           stream.rejectChunk(

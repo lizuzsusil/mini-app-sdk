@@ -10,22 +10,6 @@ import type {
 
 export const DEFAULT_API_METHOD = "POST" as const;
 
-/**
- * Generic `api.request` — the single entry point for unary + streaming.
- *
- * Only the positional form is supported: `request("POST", { ... })`.
- * - `method` defaults to `POST`; `stream` defaults to `false` (unary).
- * - `path` (legacy alias: `endpoint`) is required — it becomes the BFF
- *   envelope's inner route. `query` is folded into it as a query string.
- * - The wire `body` IS the BFF envelope `{method, path, body}`; the host
- *   POSTs it verbatim to `{BASE_URI}/api-orchestrate` (unary) or
- *   `{BASE_URI}/sse-orchestrate` (`stream: true`) with zero interpretation.
- * - `stream: true` opens a live stream via `rpc.sendStreamRequest` — raw BFF
- *   bytes the mini app parses (e.g. with `parseSseStream`). Init is just a
- *   unary call (no extra flag).
- * - Legacy `method: "STREAM"` (and `stream: { signal }`) from older bundles
- *   is remapped to `stream: true` so they keep working.
- */
 export function createApiModule(rpc: RpcClient): ApiSdkModule {
   const run = async <T = unknown>(
     method: string = DEFAULT_API_METHOD,
@@ -54,7 +38,6 @@ export function createApiModule(rpc: RpcClient): ApiSdkModule {
 
     let resolvedMethod = (method ?? DEFAULT_API_METHOD).toUpperCase();
     if (resolvedMethod === "STREAM") {
-      // Deprecated legacy sentinel — streaming is `stream: true` now.
       resolvedMethod = DEFAULT_API_METHOD;
       stream = true;
     }
@@ -73,7 +56,6 @@ export function createApiModule(rpc: RpcClient): ApiSdkModule {
         envelopePath += `${envelopePath.includes("?") ? "&" : "?"}${search}`;
     }
 
-    // The BFF envelope — the host forwards it byte-for-byte.
     const envelope: Record<string, unknown> = {
       method: resolvedMethod,
       path: envelopePath,

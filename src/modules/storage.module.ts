@@ -12,11 +12,6 @@ interface StorageRpcSetPayload {
   ttlMs?: number;
 }
 
-/**
- * The storage module. `get`/`set` speak the raw-string wire format exactly as
- * before; `getJson`/`setJson` layer JSON (de)serialization on top of that same
- * wire, and `scoped(prefix)` returns a sub-module that prefixes every key.
- */
 export function createStorageModule(rpc: RpcClient): StorageSdkModule {
   const rawGet = (key: string): Promise<string | null> =>
     rpc
@@ -44,8 +39,6 @@ export function createStorageModule(rpc: RpcClient): StorageSdkModule {
     try {
       return JSON.parse(raw) as T;
     } catch {
-      // The stored string isn't JSON (a raw-string value). Null is the honest
-      // answer — it's indistinguishable from "unset" from the caller's view.
       return null;
     }
   };

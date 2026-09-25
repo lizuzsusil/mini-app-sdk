@@ -1,4 +1,4 @@
-import type { CircuitBreakerOptions } from "@lizuz/mini-app-types";
+import type { CircuitBreakerOptions } from "sewa-platform-types";
 
 export type { CircuitBreakerOptions };
 

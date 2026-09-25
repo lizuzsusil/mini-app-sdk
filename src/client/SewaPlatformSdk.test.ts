@@ -4,14 +4,8 @@ import { SdkError } from "../errors";
 import type { PlatformMessage } from "../protocol";
 import { createMessage } from "../protocol";
 import type { Transport } from "../transport";
-import { MiniAppSdk } from "./MiniAppSdk";
+import { SewaPlatformSdk } from "./SewaPlatformSdk";
 
-/**
- * A minimal scripted `Transport` for exercising `MiniAppSdk` end-to-end.
- * Auto-responds to `handshake` and `platform.getType` (the two requests
- * `initialize()` always makes) and otherwise queues outbound messages so a
- * test can inspect or respond to them manually. No `window`/DOM involved.
- */
 class ScriptedTransport implements Transport {
   readonly sent: PlatformMessage[] = [];
   private onMessage: ((message: PlatformMessage) => void) | null = null;
@@ -60,7 +54,6 @@ class ScriptedTransport implements Transport {
       this.reply(message, undefined);
       return;
     }
-    // Every other request is left pending; the test drives the response.
   }
 
   reply(request: PlatformMessage, payload: unknown): void {
@@ -93,10 +86,10 @@ class ScriptedTransport implements Transport {
   }
 }
 
-describe("MiniAppSdk", () => {
+describe("SewaPlatformSdk", () => {
   it("initializes: starts the transport, handshakes, and resolves the platform type", async () => {
     const transport = new ScriptedTransport("flutter");
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
 
     await sdk.initialize();
 
@@ -108,7 +101,7 @@ describe("MiniAppSdk", () => {
 
   it("is idempotent: calling initialize() twice does not re-run the handshake", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
 
     await sdk.initialize();
     const handshakeCount = transport.sent.filter(
@@ -126,7 +119,7 @@ describe("MiniAppSdk", () => {
 
   it("is concurrency-safe: parallel initialize() calls share one handshake", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
 
     await Promise.all([sdk.initialize(), sdk.initialize(), sdk.initialize()]);
 
@@ -137,7 +130,7 @@ describe("MiniAppSdk", () => {
 
   it("exposes a working auth module end-to-end", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     const userPromise = sdk.auth.getUser();
@@ -147,18 +140,18 @@ describe("MiniAppSdk", () => {
 
     transport.reply(request, {
       id: "u1",
-      name: "Ada",
-      email: "ada@example.com",
+      name: "User",
+      email: "user@example.com",
       roles: [],
       permissions: [],
     });
 
-    await expect(userPromise).resolves.toMatchObject({ id: "u1", name: "Ada" });
+    await expect(userPromise).resolves.toMatchObject({ id: "u1", name: "User" });
   });
 
   it("sdk.request() keeps the raw namespace/action form working", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     const promise = sdk.request("auth", "getUser");
@@ -172,11 +165,9 @@ describe("MiniAppSdk", () => {
 
   it("sdk.request() keeps working when destructured off the instance", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
-    // Detached references must keep their receiver — `request` reads
-    // `this.rpc` internally.
     const { request, requestSafe } = sdk;
     const promise = request("auth", "getUser");
     const sent = transport.sent[transport.sent.length - 1]!;
@@ -194,7 +185,7 @@ describe("MiniAppSdk", () => {
 
   it("throws SdkError if initialize() is called after destroy()", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     sdk.destroy();
@@ -204,7 +195,7 @@ describe("MiniAppSdk", () => {
 
   it("destroy() is safe to call multiple times", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     expect(() => {
@@ -214,16 +205,12 @@ describe("MiniAppSdk", () => {
   });
 
   it("falls back to DefaultTransport when no transport dependency is provided", () => {
-    // DefaultTransport requires `window`; in this Node test environment
-    // constructing it should not throw (construction is lazy — only
-    // start()/send() touch `window`), proving the SDK still works exactly
-    // as before for consumers who don't inject anything.
-    expect(() => new MiniAppSdk({ miniAppId: "my-mini-app" })).not.toThrow();
+    expect(() => new SewaPlatformSdk({ miniAppId: "my-mini-app" })).not.toThrow();
   });
 
   it("runs a registered middleware around every module call", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     const seen: string[] = [];
@@ -236,8 +223,8 @@ describe("MiniAppSdk", () => {
     const request = transport.sent[transport.sent.length - 1]!;
     transport.reply(request, {
       id: "u1",
-      name: "Ada",
-      email: "ada@example.com",
+      name: "User",
+      email: "user@example.com",
       roles: [],
       permissions: [],
     });
@@ -248,15 +235,15 @@ describe("MiniAppSdk", () => {
 
   it("reports accurate metrics after a mix of successful module calls", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     const userPromise = sdk.auth.getUser();
     const request = transport.sent[transport.sent.length - 1]!;
     transport.reply(request, {
       id: "u1",
-      name: "Ada",
-      email: "ada@example.com",
+      name: "User",
+      email: "user@example.com",
       roles: [],
       permissions: [],
     });
@@ -272,7 +259,7 @@ describe("MiniAppSdk", () => {
 
   it("lets a host or vendor register and retrieve a custom module", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     sdk.registerModule("payments", (rpc) => ({
@@ -296,7 +283,7 @@ describe("MiniAppSdk", () => {
 
   it("exposes built-in modules through getModule() by their namespace name", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     expect(sdk.getModule("auth")).toBe(sdk.auth);
@@ -304,7 +291,7 @@ describe("MiniAppSdk", () => {
 
   it("getModule() returns undefined for a module that was never registered", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     expect(sdk.getModule("does-not-exist")).toBeUndefined();
@@ -312,7 +299,7 @@ describe("MiniAppSdk", () => {
 
   it("debug.snapshot() reports a serializable view of the instance", async () => {
     const transport = new ScriptedTransport("web");
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     const snapshot = sdk.debug.snapshot();
@@ -333,7 +320,7 @@ describe("MiniAppSdk", () => {
 
   it("debug.snapshot() reflects an in-flight request", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     const userPromise = sdk.auth.getUser();
@@ -348,8 +335,8 @@ describe("MiniAppSdk", () => {
     const request = transport.sent[transport.sent.length - 1]!;
     transport.reply(request, {
       id: "u1",
-      name: "Ada",
-      email: "ada@example.com",
+      name: "User",
+      email: "user@example.com",
       roles: [],
       permissions: [],
     });
@@ -360,7 +347,7 @@ describe("MiniAppSdk", () => {
 
   it("debug.snapshot() reports the destroyed status after destroy()", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
     sdk.destroy();
 
@@ -370,7 +357,7 @@ describe("MiniAppSdk", () => {
   it("enables the built-in ConsoleLogger when logLevel is set", async () => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk(
+    const sdk = new SewaPlatformSdk(
       { miniAppId: "my-mini-app", devMode: false, logLevel: "info" },
       { transport },
     );
@@ -383,7 +370,7 @@ describe("MiniAppSdk", () => {
   it("stays silent on console when no logger, logLevel, or devMode is set", async () => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk(
+    const sdk = new SewaPlatformSdk(
       { miniAppId: "my-mini-app", devMode: false },
       { transport },
     );
@@ -396,7 +383,7 @@ describe("MiniAppSdk", () => {
   it("invokes the metrics export hook on every getMetrics() snapshot", async () => {
     const onSnapshot = vi.fn();
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk(
+    const sdk = new SewaPlatformSdk(
       { miniAppId: "my-mini-app", metrics: { onSnapshot } },
       { transport },
     );
@@ -416,15 +403,15 @@ describe("MiniAppSdk", () => {
 
   it("reports latency percentiles in the metrics snapshot", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     const userPromise = sdk.auth.getUser();
     const request = transport.sent[transport.sent.length - 1]!;
     transport.reply(request, {
       id: "u1",
-      name: "Ada",
-      email: "ada@example.com",
+      name: "User",
+      email: "user@example.com",
       roles: [],
       permissions: [],
     });
@@ -445,25 +432,23 @@ describe("MiniAppSdk", () => {
 
   it("feature-detects device capabilities via isSupported", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
-    // The scripted host reports no capabilities, so the SDK assumes full
-    // support — the device namespace counts as negotiated.
     expect(sdk.device.isSupported("location")).toBe(true);
     expect(sdk.device.isSupported("biometric")).toBe(true);
   });
 
   it("reports isSupported false before initialize() resolves", () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
 
     expect(sdk.device.isSupported("location")).toBe(false);
   });
 
   it("emits a typed event to the host event bus", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     sdk.emit("navigation.route.changed", {
@@ -483,7 +468,7 @@ describe("MiniAppSdk", () => {
 
   it("replays buffered events to a late sdk.on(..., { replay: true }) subscriber", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     sdk.on("appearance.theme.changed", () => {});
@@ -497,7 +482,7 @@ describe("MiniAppSdk", () => {
 
   it("does not replay buffered events without the replay option", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     sdk.on("appearance.theme.changed", () => {});
@@ -510,7 +495,7 @@ describe("MiniAppSdk", () => {
 
   it("exposes the notifications and links modules end-to-end", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     const onToken = vi.fn();
@@ -544,7 +529,7 @@ describe("MiniAppSdk", () => {
 
   it("routes notifications.register and links.open through their namespaces", async () => {
     const transport = new ScriptedTransport();
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     const registerPromise = sdk.notifications.register({ requestPermission: true });
@@ -571,11 +556,10 @@ describe("MiniAppSdk", () => {
 
   it("gates notifications and links on negotiated capabilities", async () => {
     const transport = new ScriptedTransport("flutter", ["auth", "api"]);
-    const sdk = new MiniAppSdk({ miniAppId: "my-mini-app" }, { transport });
+    const sdk = new SewaPlatformSdk({ miniAppId: "my-mini-app" }, { transport });
     await sdk.initialize();
 
     expect(sdk.notifications.isSupported()).toBe(false);
-    // links.isSupported is a boolean property in @lizuz/mini-app-types (not a function)
     expect((sdk.links as unknown as { isSupported: boolean | (() => boolean) }).isSupported).toBe(false);
     expect(sdk.capabilities).toEqual(["auth", "api"]);
   });

@@ -1,22 +1,3 @@
-/**
- * Shared SSE event parser — the single home for `text/event-stream` framing
- * on the mini-app side, used by every host (web, mobile, …).
- *
- * Hosts stay dumb byte pipes: they forward the BFF response bytes verbatim
- * as `stream` chunks and never interpret them. This parser consumes the
- * reassembled chunks (e.g. `StreamBuilder.iterate()`) and yields one flat
- * `{type, ...data}` event per SSE block. Byte chunks never align to event
- * boundaries, so parsing lives here — buffered across chunks — rather than
- * per-chunk in each mini app.
- *
- * Rules (transport framing only, no business semantics):
- * - `event: <name>` becomes `type`; JSON `data:` is spread alongside it.
- * - Non-JSON `data:` becomes `{ text: <raw> }`; multi-line `data:` is joined.
- * - Blocks without an `event:` line are skipped; `id:`/`retry:`/comments ignored.
- * - An `error` event is yielded last, then parsing completes (never throws),
- *   mirroring the terminal-`isLast` framing — consumers switch on the event.
- */
-
 export interface SseStreamEvent {
   type: string;
   [key: string]: unknown;
@@ -50,13 +31,6 @@ function parseBlock(rawEvent: string): SseStreamEvent | null {
   };
 }
 
-/**
- * Parses an SSE byte/text chunk stream into discrete events. Accepts the raw
- * output of `StreamBuilder.iterate()` — `string` or `Uint8Array` chunks in
- * any slicing. Split events spanning chunk boundaries are reassembled via an
- * internal buffer. Completes when the chunk stream ends; an `error` event, if
- * any, is always the last event yielded.
- */
 export async function* parseSseStream(
   chunks: AsyncIterable<string | Uint8Array>,
 ): AsyncGenerator<SseStreamEvent> {

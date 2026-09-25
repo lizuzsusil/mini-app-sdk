@@ -1,8 +1,3 @@
-/**
- * Generates a unique identifier. Prefers `crypto.randomUUID()` where
- * available (all modern browsers and WebViews) and falls back to a
- * timestamp+random string for older/embedded JS engines.
- */
 export function generateId(): string {
   if (
     typeof crypto !== "undefined" &&

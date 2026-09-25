@@ -6,11 +6,6 @@ export interface RequestCancelledErrorOptions {
   cause?: unknown;
 }
 
-/**
- * Raised when a caller aborts an in-flight request via its `AbortSignal`
- * before the host answers. Never retryable: a cancellation is the caller's
- * explicit choice, not a transient failure.
- */
 export class RequestCancelledError extends SdkError {
   readonly namespace: string;
   readonly action: string;

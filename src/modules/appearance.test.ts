@@ -78,8 +78,6 @@ describe("appearance module", () => {
 
   it("seeds the store from a structured hint (the web shell) without re-deriving", () => {
     const { handle } = makeModule(undefined, []);
-    // Host says `rtl` for a language our RTL table would call `ltr` — the
-    // host is authoritative and must win.
     handle.applyHint({
       locale: {
         locale: "xx-YY",
@@ -148,7 +146,6 @@ describe("appearance normalizers", () => {
       region: "SA",
       direction: "rtl",
     });
-    // Underscore separators and odd casing are common from mobile hosts.
     expect(normalizeLocale("EN_lk")).toEqual({
       locale: "en-LK",
       language: "en",

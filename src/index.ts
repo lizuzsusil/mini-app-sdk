@@ -1,9 +1,9 @@
-import { MiniAppSdk } from "./client";
+import { SewaPlatformSdk } from "./client";
 import { SdkError } from "./errors";
-import type { MiniAppSdkOptions } from "./types";
+import type { SewaPlatformSdkOptions } from "./types";
 
-export type { MiniAppSdkDependencies, SdkPlugin } from "./client";
-export { MiniAppSdk } from "./client";
+export type { SdkPlugin, SewaPlatformSdkDependencies } from "./client";
+export { SewaPlatformSdk } from "./client";
 export {
   clearInstances,
   getAllInstances,
@@ -122,15 +122,12 @@ export type {
   DiagnosticSeverity,
   Direction,
   EventHandler,
-  FlagsSdkModule,
   HeartbeatOptions,
   HostDescriptor,
   LinksOpenedEvent,
   LinksOpenOptions,
   LinksSdkModule,
   LocaleState,
-  MiniAppSdkInterface,
-  MiniAppSdkOptions,
   ModelCompletionOptions,
   NavigationRouterResult,
   NavigationRouterSdkModule,
@@ -155,6 +152,8 @@ export type {
   SdkDebugSnapshot,
   SdkEventMap,
   SdkStatus,
+  SewaPlatformSdkInterface,
+  SewaPlatformSdkOptions,
   StorageSdkModule,
   StorageSetOptions,
   StreamChunk,
@@ -170,28 +169,19 @@ import {
   registerInstance as registerRegistryInstance,
 } from "./client/instance-registry";
 
-/**
- * Module-scoped "active instance" used only by the `createMiniAppSdk` /
- * `getMiniAppSdk` / `initMiniAppSdk` convenience trio below, for
- * consumers who want a single implicit SDK instance instead of managing
- * their own reference. Delegates to the shared `instance-registry` so the
- * CDN IIFE (`src/cdn.ts`) and this helper share the same backing store
- * (see A2 in `future.md`).
- */
-let activeInstance: MiniAppSdk | null = null;
+let activeInstance: SewaPlatformSdk | null = null;
 
-/** Constructs a `MiniAppSdk` without initializing it. Call `.initialize()` yourself. */
-export function createMiniAppSdk(options: MiniAppSdkOptions): MiniAppSdk {
-  const sdk = new MiniAppSdk(options);
-  // Register eagerly so `MiniAppSdk.getInstance()` and `window.__GSA_SDK__`
-  // reflect the instance even before `initialize()` (mirrors CDN behavior).
+/** Constructs a `SewaPlatformSdk` without initializing it. Call `.initialize()` yourself. */
+export function createSewaPlatformSdk(
+  options: SewaPlatformSdkOptions,
+): SewaPlatformSdk {
+  const sdk = new SewaPlatformSdk(options);
   registerRegistryInstance(sdk);
   activeInstance = sdk;
   return sdk;
 }
 
-/** Returns the instance created by the most recent `initMiniAppSdk()` call. */
-export function getMiniAppSdk(): MiniAppSdk {
+export function getSewaPlatformSdk(): SewaPlatformSdk {
   if (activeInstance) return activeInstance;
   const fromRegistry = getRegistryInstance();
   if (fromRegistry) {
@@ -200,26 +190,20 @@ export function getMiniAppSdk(): MiniAppSdk {
   }
   throw new SdkError({
     code: "SDK_NOT_INITIALIZED",
-    message: "Mini App SDK not initialized. Call initMiniAppSdk() first.",
+    message: "Mini App SDK not initialized. Call initSewaPlatformSdk() first.",
   });
 }
 
-/** Constructs, initializes, and registers a `MiniAppSdk` as the active instance. */
-export async function initMiniAppSdk(
-  options: MiniAppSdkOptions,
-): Promise<MiniAppSdk> {
-  const sdk = new MiniAppSdk(options);
+export async function initSewaPlatformSdk(
+  options: SewaPlatformSdkOptions,
+): Promise<SewaPlatformSdk> {
+  const sdk = new SewaPlatformSdk(options);
   await sdk.initialize();
   registerRegistryInstance(sdk);
   activeInstance = sdk;
   return sdk;
 }
 
-/**
- * Prefer `MiniAppSdk.getInstance()` for new code. Kept for backward
- * compatibility with existing consumers reading the module-scoped helper.
- * @deprecated Use `MiniAppSdk.getInstance()` or `getInstance()` from `instance-registry`.
- */
-export function getActiveInstance(): MiniAppSdk | null {
+export function getActiveInstance(): SewaPlatformSdk | null {
   return activeInstance ?? getRegistryInstance() ?? null;
 }

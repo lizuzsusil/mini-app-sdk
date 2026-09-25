@@ -1,1 +1,1 @@
-export type { ConfigSdkModule, FlagsSdkModule } from "@lizuz/mini-app-types";
+export type { ConfigSdkModule, FlagsSdkModule } from "sewa-platform-types";

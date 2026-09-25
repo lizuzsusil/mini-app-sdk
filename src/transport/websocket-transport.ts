@@ -3,11 +3,6 @@ import type { PlatformMessage } from "../protocol";
 import { isValidPlatformMessage } from "../protocol";
 import type { Transport, TransportDebugInfo } from "./transport";
 
-/**
- * Transport over WebSocket. Useful for dedicated host shells, Electron,
- * or Tauri bridges where `postMessage` is unavailable. Implements the same
- * `Transport` interface so `RpcClient` remains agnostic.
- */
 export interface WebSocketTransportOptions {
   url: string;
   protocols?: string | string[];
@@ -44,9 +39,7 @@ export class WebSocketTransport implements Transport {
       "message",
       this.handleMessage as EventListener,
     );
-    this.socket.addEventListener("error", () => {
-      // Let RpcClient heartbeat detect liveness.
-    });
+    this.socket.addEventListener("error", () => {});
     this.started = true;
   }
 
@@ -56,7 +49,6 @@ export class WebSocketTransport implements Transport {
         "message",
         this.handleMessage as EventListener,
       );
-      // Do not close externally provided sockets automatically
       if (!this.socket) return;
       try {
         this.socket.close();

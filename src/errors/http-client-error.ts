@@ -1,13 +1,6 @@
 import { SdkError } from "./sdk-error";
 
-/**
- * Raised when an HTTP request resolves but the host's response carries a 4xx
- * status. Distinct from `HttpServerError` so consumers can branch on the kind
- * of failure: 4xx is never retryable — the request itself was rejected, and
- * retrying it would only fail again.
- */
 export class HttpClientError extends SdkError {
-  /** The HTTP status code the host reported (e.g. 404, 422). */
   readonly status: number;
 
   constructor(params: {

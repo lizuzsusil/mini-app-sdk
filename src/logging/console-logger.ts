@@ -1,23 +1,11 @@
-import type { ConsoleLoggerOptions } from "@lizuz/mini-app-types";
+import type { ConsoleLoggerOptions } from "sewa-platform-types";
 import type { Logger } from "./logger";
 
-export type { ConsoleLoggerOptions } from "@lizuz/mini-app-types";
+export type { ConsoleLoggerOptions } from "sewa-platform-types";
 
 const LEVEL_ORDER = { debug: 0, info: 1, warn: 2, error: 3 } as const;
 const REDACTED_MARKER = "[REDACTED]";
 
-/**
- * The SDK's ready-to-use `Logger` implementation. Not wired in by default —
- * `MiniAppSdk` still defaults to `NoopLogger` so logging stays opt-in — but
- * this is what a mini app or host passes in when it wants to actually see
- * what the SDK is doing:
- *
- * ```ts
- * const sdk = new MiniAppSdk({ miniAppId: 'x' }, {
- *   logger: new ConsoleLogger({ minLevel: 'debug', redact: new Set(['token']) }),
- * });
- * ```
- */
 export class ConsoleLogger implements Logger {
   private readonly minLevel: "debug" | "info" | "warn" | "error";
   private readonly prefix: string;
@@ -27,7 +15,7 @@ export class ConsoleLogger implements Logger {
 
   constructor(options: ConsoleLoggerOptions = {}) {
     this.minLevel = options.minLevel ?? "info";
-    this.prefix = options.prefix ?? "[MiniAppSdk]";
+    this.prefix = options.prefix ?? "[SewaPlatformSdk]";
     this.redact = options.redact;
     this.deep = options.deep ?? false;
     this.format = options.format ?? "text";

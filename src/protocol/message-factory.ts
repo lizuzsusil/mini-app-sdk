@@ -13,12 +13,6 @@ export interface CreateMessageOptions {
   error?: PlatformError;
 }
 
-/**
- * Builds a `PlatformMessage` envelope with every required field populated.
- * This is the only place in the SDK that should construct an envelope by
- * hand — everywhere else should call this factory so the envelope shape
- * stays consistent as the protocol evolves.
- */
 export function createMessage<TPayload = unknown>(
   type: MessageType,
   namespace: string,

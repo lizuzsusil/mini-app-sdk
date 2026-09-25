@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 /**
  * Verifies the wire protocol version stays in sync across every copy that
- * ships it. `@lizuz/mini-app-types` is a types-only package (no runtime JS),
+ * ships it. `sewa-platform-types` is a types-only package (no runtime JS),
  * so the runtime constant is mirrored in the SDK and the host shell; this
  * guard fails the build if those mirrors drift from the shared source of
  * truth.
@@ -14,7 +14,7 @@ const sources = [
     path: "../../mini-app-types/src/constants.ts",
   },
   {
-    name: "mini-app-sdk",
+    name: "sewa-platform-sdk",
     path: "../src/constants/protocol.constants.ts",
   },
   {

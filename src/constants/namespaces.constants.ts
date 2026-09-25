@@ -1,12 +1,3 @@
-/**
- * Every RPC namespace the SDK talks to. Centralized so a typo in a module
- * implementation becomes a compile error (unknown property) instead of a
- * silently-broken runtime string.
- *
- * Mirrors `@lizuz/mini-app-types/src/constants.ts` — keep in sync.
- * Runtime values are duplicated for bundling (types package is types-only);
- * types are shared via `import type`.
- */
 export const NAMESPACES = {
   AUTH: "auth",
   PERMISSIONS: "permissions",
@@ -27,13 +18,6 @@ export const NAMESPACES = {
 
 export type Namespace = (typeof NAMESPACES)[keyof typeof NAMESPACES];
 
-/**
- * The domain namespaces this SDK build can make requests against. Sent to
- * the host during the handshake so it can tell the mini app which of them,
- * if any, it doesn't actually implement — deliberately excludes `event` and
- * `handshake`, which are protocol-level concerns rather than domain
- * capabilities a host opts in or out of.
- */
 export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.AUTH,
   NAMESPACES.PERMISSIONS,
@@ -49,10 +33,6 @@ export const SDK_CAPABILITIES: string[] = [
   NAMESPACES.LINKS,
 ];
 
-/**
- * Actions, grouped by namespace. Every module implementation must use these
- * instead of inline string literals.
- */
 export const ACTIONS = {
   AUTH: {
     GET_USER: "getUser",
@@ -103,7 +83,6 @@ export const ACTIONS = {
   },
   API: {
     REQUEST: "request",
-    /** Stream cancellation — SDK notifies via `<namespace>.cancel` when a stream is cancelled. */
     CANCEL: "cancel",
   },
   APPEARANCE: {
@@ -129,61 +108,25 @@ export const ACTIONS = {
   },
 } as const;
 
-/**
- * Navigation events on the wire, in both directions:
- *
- *  - `BACK_REQUESTED` (host → mini app) is published when the user presses
- *    the native back button. The host holds the container open until the
- *    mini app answers with `navigation.router.back(consumed)`; `false`
- *    means "I'm at my root, you take over".
- *  - `ROUTE_CHANGED` (mini app → host) is what a mini app `emit()`s after
- *    its own router moved, so the host can keep its back-button policy in
- *    sync without polling `navigation.getCurrent()`.
- */
 export const NAVIGATION_EVENTS = {
   BACK_REQUESTED: "navigation.back.requested",
   ROUTE_CHANGED: "navigation.route.changed",
 } as const;
 
-/**
- * Connection-state events the SDK itself emits (as opposed to host-published
- * events). Mini apps subscribe with `sdk.on("connection.lost", …)` /
- * `sdk.on("connection.established", …)` to reconcile state — re-fetch config
- * or flags, re-subscribe to events — after a host restart or transport drop.
- * Emitted only when the heartbeat/reconnect feature is enabled.
- */
 export const CONNECTION_EVENTS = {
   LOST: "connection.lost",
   ESTABLISHED: "connection.established",
 } as const;
 
-/**
- * Upload-progress events on the wire. `UPLOAD_PROGRESS` (host → mini app)
- * is how the host reports bytes-sent for an in-flight upload;
- * `api.request` mirrors it onto `onProgress`, and mini apps can also
- * subscribe directly with `sdk.on("api.uploadProgress", …)`.
- */
 export const HTTP_EVENTS = {
   UPLOAD_PROGRESS: "api.uploadProgress",
 } as const;
 
-/**
- * Notification events on the wire (host → mini app): `TOKEN` delivers the
- * device push token once the host has it, `OPENED` fires when the user taps
- * a push notification and the host resolves it into the mini app. Mini apps
- * subscribe via `sdk.notifications.onToken` / `sdk.notifications.onOpen`, or
- * directly with `sdk.on("notifications.token", …)`.
- */
 export const NOTIFICATIONS_EVENTS = {
   TOKEN: "notifications.token",
   OPENED: "notifications.opened",
 } as const;
 
-/**
- * Deep-link events on the wire (host → mini app): `OPENED` fires when the
- * host resolves an incoming deep link into the mini app. Subscribe via
- * `sdk.links.onOpen` or `sdk.on("links.opened", …)`.
- */
 export const LINKS_EVENTS = {
   OPENED: "links.opened",
 } as const;

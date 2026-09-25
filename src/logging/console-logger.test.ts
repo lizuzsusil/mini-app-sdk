@@ -12,7 +12,7 @@ describe("ConsoleLogger", () => {
 
     logger.info("hello");
 
-    expect(spy).toHaveBeenCalledWith("[MiniAppSdk] hello", "");
+    expect(spy).toHaveBeenCalledWith("[SewaPlatformSdk] hello", "");
   });
 
   it("drops messages below the configured minLevel", () => {
@@ -52,7 +52,7 @@ describe("ConsoleLogger", () => {
 
     logger.info("hi", { userId: "123" });
 
-    expect(spy).toHaveBeenCalledWith("[MiniAppSdk] hi", { userId: "123" });
+    expect(spy).toHaveBeenCalledWith("[SewaPlatformSdk] hi", { userId: "123" });
   });
 
   it("redacts matching context keys via a Set", () => {
@@ -63,7 +63,7 @@ describe("ConsoleLogger", () => {
 
     logger.info("hi", { token: "secret", userId: "123" });
 
-    expect(spy).toHaveBeenCalledWith("[MiniAppSdk] hi", {
+    expect(spy).toHaveBeenCalledWith("[SewaPlatformSdk] hi", {
       token: "[REDACTED]",
       userId: "123",
     });
@@ -72,12 +72,12 @@ describe("ConsoleLogger", () => {
   it("redacts context keys via a predicate", () => {
     const spy = vi.spyOn(console, "info").mockImplementation(() => {});
     const logger = new ConsoleLogger({
-      redact: (key, value) => key === "secret" || value === "super-sensitive",
+      redact: (key:any, value:any) => key === "secret" || value === "super-sensitive",
     });
 
     logger.info("hi", { secret: "a", name: "b", note: "super-sensitive" });
 
-    expect(spy).toHaveBeenCalledWith("[MiniAppSdk] hi", {
+    expect(spy).toHaveBeenCalledWith("[SewaPlatformSdk] hi", {
       secret: "[REDACTED]",
       name: "b",
       note: "[REDACTED]",
@@ -91,8 +91,7 @@ describe("ConsoleLogger", () => {
     const context = { userId: "123" };
     logger.info("hi", context);
 
-    expect(spy).toHaveBeenCalledWith("[MiniAppSdk] hi", context);
-    // The same object is passed through, not a copy.
+    expect(spy).toHaveBeenCalledWith("[SewaPlatformSdk] hi", context);
     expect(spy.mock.calls[0][1]).toBe(context);
   });
 });

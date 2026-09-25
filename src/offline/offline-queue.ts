@@ -1,5 +1,5 @@
-import type { OfflineQueueOptions } from "@lizuz/mini-app-types";
-import type { SdkPlugin } from "../client/MiniAppSdk";
+import type { OfflineQueueOptions } from "sewa-platform-types";
+import type { SdkPlugin } from "../client/SewaPlatformSdk";
 import { CONNECTION_EVENTS } from "../constants";
 import type { Logger } from "../logging";
 
@@ -15,16 +15,6 @@ interface QueuedRequest {
   options?: { dedupe?: boolean };
 }
 
-/**
- * Offline queue plugin. When `navigator.onLine === false` or `connection.lost`
- * has fired, matching requests are enqueued and replayed on `connection.established`
- * or `online` event. Non-allowlisted namespaces fail fast with the original error.
- *
- * Usage:
- * ```ts
- * await sdk.usePlugin(createOfflineQueuePlugin({ allowlist: ['storage'] }));
- * ```
- */
 export function createOfflineQueuePlugin(
   options: OfflineQueueOptions = {},
 ): SdkPlugin {
@@ -76,7 +66,6 @@ export function createOfflineQueuePlugin(
     name: "offline-queue",
     install(ctx) {
       sdkRef = { rpc: ctx.rpc, logger: ctx.logger };
-      // Offline detection via navigator + connection events
       if (typeof window !== "undefined") {
         window.addEventListener("online", () => {
           isOnline = true;

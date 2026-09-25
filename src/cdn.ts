@@ -1,18 +1,11 @@
-import type { MiniAppSdkDependencies } from "./client";
-import { MiniAppSdk } from "./client";
+import type { SewaPlatformSdkDependencies } from "./client";
+import { SewaPlatformSdk } from "./client";
 import { SDK_GLOBAL_KEY } from "./constants";
-import type { MiniAppSdkOptions } from "./types";
+import type { SewaPlatformSdkOptions } from "./types";
 
-/**
- * Global config the host shell sets on `window.__GSA_SDK__` before the CDN
- * `<script>` tag runs. Shape matches `MiniAppSdkOptions`: `miniAppId` is
- * required, everything else is optional tuning. The SDK overwrites this same
- * key with the live instance once constructed.
- */
-export type CdnSdkConfig = MiniAppSdkOptions;
+export type CdnSdkConfig = SewaPlatformSdkOptions;
 
-/** Reads the host-provided config from `window.__GSA_SDK__`. */
-function resolveConfig(): MiniAppSdkOptions {
+function resolveConfig(): SewaPlatformSdkOptions {
   const config =
     typeof window !== "undefined"
       ? (window as unknown as Record<string, unknown>)[SDK_GLOBAL_KEY]
@@ -20,30 +13,22 @@ function resolveConfig(): MiniAppSdkOptions {
   if (
     config &&
     typeof config === "object" &&
-    typeof (config as MiniAppSdkOptions).miniAppId === "string"
+    typeof (config as SewaPlatformSdkOptions).miniAppId === "string"
   ) {
-    return config as MiniAppSdkOptions;
+    return config as SewaPlatformSdkOptions;
   }
   throw new Error(
-    `Mini App SDK: missing global config. Set window.${SDK_GLOBAL_KEY} = { miniAppId, ... } before loading the script.`,
+    `Sewa SDK: missing global config. Set window.${SDK_GLOBAL_KEY} = { miniAppId, ... } before loading the script.`,
   );
 }
 
 const opts = resolveConfig();
-const deps: MiniAppSdkDependencies = {
+const deps: SewaPlatformSdkDependencies = {
   allowedOrigin: opts.targetOrigin,
 };
 
-/**
- * Single, page-wide MiniAppSdk instance. Constructing it overwrites
- * `window.__GSA_SDK__` (the pre-load config) with the instance; `destroy()`
- * removes it again.
- */
-const sdk = new MiniAppSdk(opts, deps);
+const sdk = new SewaPlatformSdk(opts, deps);
 void sdk.initialize().catch((error) => {
-  console.error(
-    `Mini App SDK("${opts.miniAppId}") initialization failed`,
-    error,
-  );
+  console.error(`Sewa SDK("${opts.miniAppId}") initialization failed`, error);
   sdk.destroy();
 });

@@ -1,1 +1,1 @@
-# @lizuzsusil/mini-app-sdk
+# @lizuzsusil/sewa-platform-sdk

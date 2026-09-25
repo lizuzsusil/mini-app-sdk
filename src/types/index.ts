@@ -1,5 +1,5 @@
 /**
- * `@lizuz/mini-app-types` spells this one `…SkdModule`. Re-exported under
+ * `sewa-platform-types` spells this one `…SkdModule`. Re-exported under
  * the corrected name so nothing in this SDK — or in a mini app consuming
  * it — has to repeat the typo; the original spelling is kept alongside so
  * code already written against the types package still compiles.
@@ -31,7 +31,6 @@ export type {
   DeviceSdkModule,
   Direction,
   EventHandler,
-  FlagsSdkModule,
   HostDescriptor,
   LinksOpenedEvent,
   LinksOpenOptions,
@@ -59,7 +58,7 @@ export type {
   ThemeMode,
   ThemePreference,
   ThemeState,
-} from "@lizuz/mini-app-types";
+} from "sewa-platform-types";
 export type {
   ApiRequestMethod,
   ApiRequestParams,
@@ -85,13 +84,13 @@ export type {
   Diagnostic,
   DiagnosticSeverity,
   HeartbeatOptions,
-  MiniAppSdkInterface,
-  MiniAppSdkOptions,
   PendingRequestInfo,
   ReliabilityOptions,
   SdkDebug,
   SdkDebugSnapshot,
   SdkPlugin,
   SdkStatus,
+  SewaPlatformSdkInterface,
+  SewaPlatformSdkOptions,
 } from "./sdk.types";
 export { validateSdkOptions } from "./validate-options";

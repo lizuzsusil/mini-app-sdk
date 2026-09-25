@@ -1,4 +1,4 @@
-import type { StreamChunk } from "@lizuz/mini-app-types";
+import type { StreamChunk } from "sewa-platform-types";
 import { describe, expect, it, vi } from "vitest";
 import { StreamCancelledError } from "../errors";
 import { StreamBuilder } from "./stream-builder";

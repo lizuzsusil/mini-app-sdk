@@ -8,11 +8,7 @@ interface StoredEntry {
   expiresAt?: number;
 }
 
-/**
- * An in-memory stand-in for the host's storage backend: `set`/`get`/`remove`
- * handlers with a `ttlMs`-aware read, so the module's wire behavior (including
- * TTL and JSON) can be exercised without a real host.
- */
+
 function makeModule() {
   const store = new Map<string, StoredEntry>();
   const rpc = {
@@ -117,7 +113,6 @@ describe("storage module", () => {
     );
     await expect(scoped.get("theme")).resolves.toBe("dark");
 
-    // The parent scope does not see the scoped key.
     await expect(module.get("prefs:theme")).resolves.toBe("dark");
     await expect(module.get("theme")).resolves.toBeNull();
   });

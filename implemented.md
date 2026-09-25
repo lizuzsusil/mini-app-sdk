@@ -24,7 +24,7 @@ All items below map to `future.md` sections and were implemented as **pure addit
 
 | # | Feature | `future.md` Ref | Effort | Status |
 |---|---------|----------------|--------|--------|
-| F1 | **Instance registry unification** (`src/client/instance-registry.ts`) — single `Map<miniAppId, MiniAppSdk>` backing both `window.__GSA_SDK__` (CDN) and module-scoped `activeInstance` (`src/index.ts:153`). | A2 §3.1 | S | ✅ Done |
+| F1 | **Instance registry unification** (`src/client/instance-registry.ts`) — single `Map<miniAppId, SewaPlatformSdk>` backing both `window.__SEWA_SDK__` (CDN) and module-scoped `activeInstance` (`src/index.ts:153`). | A2 §3.1 | S | ✅ Done |
 | F2 | **Structured error guards + `SdkError.toJSON()`** — `isSdkError`, `isRetryable`, `isTimeout`, `isTransportError`, `isHandshakeError`, `isAuthError`, `getErrorCode`, `SdkErrorCode="INVALID_OPTIONS"`. | OBS1 §3.9 | S | ✅ Done |
 | F3 | **Option validation `validateSdkOptions`** — fail-fast on bad `miniAppId/timeout/retry*`/`heartbeat`/`targetOrigin`/`logLevel` with `INVALID_OPTIONS`. | E3 §3.3 | S | ✅ Done |
 | F4 | **Diagnostics `debug.diagnose()`** — heuristic checks (`NOT_INITIALIZED`, `DESTROYED`, `NO_CAPABILITIES`, `PENDING_BACKLOG>5`, `TRANSPORT_NOT_STARTED`, `HIGH_FAILURE_RATE>50%`, `APPEARANCE_INCOMPLETE`, `PLUGINS_ACTIVE`, `DIAGNOSE_ERROR`). | OBS1/AI3 §3.9/3.13 | S | ✅ Done |
@@ -59,15 +59,15 @@ All items below map to `future.md` sections and were implemented as **pure addit
 ### 3.1 New Files
 
 #### `src/client/instance-registry.ts` (+68 lines) — NEW
-**Purpose:** A2 — unify dual singletons (`src/index.ts:153` `activeInstance` vs `window.__GSA_SDK__` + `src/client/MiniAppSdk.ts:248` global write).  
+**Purpose:** A2 — unify dual singletons (`src/index.ts:153` `activeInstance` vs `window.__SEWA_SDK__` + `src/client/SewaPlatformSdk.ts:248` global write).  
 **Implementation:**
-- `Map<string, MiniAppSdk> instances` keyed by `miniAppId`.
-- `registerInstance(instance)` → `instances.set(...)` + `writeGlobal(instance)` (mirrors to `globalThis.__GSA_SDK__` for CDN backward compat).
+- `Map<string, SewaPlatformSdk> instances` keyed by `miniAppId`.
+- `registerInstance(instance)` → `instances.set(...)` + `writeGlobal(instance)` (mirrors to `globalThis.__SEWA_SDK__` for CDN backward compat).
 - `unregisterInstance(instance)` → delete + restore last remaining instance to global.
-- `getInstance(miniAppId?)` → by key or most-recently-registered (matches legacy `getMiniAppSdk()` semantics). Uses `array[array.length-1]` (ES2020 compat, not `.at(-1)`).
+- `getInstance(miniAppId?)` → by key or most-recently-registered (matches legacy `getSewaPlatformSdk()` semantics). Uses `array[array.length-1]` (ES2020 compat, not `.at(-1)`).
 - `getAllInstances()`, `clearInstances()`.
 - `writeGlobal` wrapped in `try/catch` for non-writable `globalThis` in embedded WebViews.
-**Backward compat:** Existing code reading `window.__GSA_SDK__` keeps working; both CDN IIFE and module helpers share same backing store.  
+**Backward compat:** Existing code reading `window.__SEWA_SDK__` keeps working; both CDN IIFE and module helpers share same backing store.  
 **Exports:** Re-exported from `src/client/index.ts:3` and `src/index.ts:4`.
 
 #### `src/errors/guards.ts` (+58 lines) — NEW
@@ -84,13 +84,13 @@ All items below map to `future.md` sections and were implemented as **pure addit
 **Consumers:** `src/errors/index.ts:1` re-exports; `src/index.ts:17` public re-export.
 
 #### `src/types/validate-options.ts` (+73 lines) — NEW
-**Purpose:** E3 — fluent validation for `MiniAppSdkOptions` (`future.md` §3.3).  
+**Purpose:** E3 — fluent validation for `SewaPlatformSdkOptions` (`future.md` §3.3).  
 **Logic:**
 - `miniAppId` required non-empty string else `SdkError {code:"INVALID_OPTIONS"}`.
 - `checkPositive(name, value, allowZero)` for `timeout/retryAttempts/retryDelayMs/maxRetryDelayMs`; finite number ≥1 (or ≥0 if allowZero).
 - `heartbeat` must be object, each `intervalMs/timeoutMs/maxMissedPongs` positive finite if present.
 - `targetOrigin` string if present, `logLevel` one of `debug|info|warn|error` if present.
-**Usage:** Called at top of `MiniAppSdk` constructor (`src/client/MiniAppSdk.ts:168`).  
+**Usage:** Called at top of `SewaPlatformSdk` constructor (`src/client/SewaPlatformSdk.ts:168`).  
 **Compat:** New code `INVALID_OPTIONS` additive; previously invalid configs were buggy and now fail fast (preferred over silent timeout).
 
 #### `src/testing/mock-host.ts` (+95 lines) — NEW
@@ -112,34 +112,34 @@ class MockHost {
 
 ### 3.2 Modified Files — Core SDK
 
-#### `src/client/MiniAppSdk.ts` (+302 −22, 798 lines total) — MAJOR
+#### `src/client/SewaPlatformSdk.ts` (+302 −22, 798 lines total) — MAJOR
 **Imports:**
 - Removed `SDK_GLOBAL_KEY` (no longer directly written) → `src/constants:2`.
 - Added `Diagnostic` (`src/types:45`), `validateSdkOptions` (`src/types/validate-options:67`), `registerInstance/unregisterInstance/getRegistryInstance` (`src/client/instance-registry:69`).
 
-**New interface `SdkPlugin` (`src/client/MiniAppSdk.ts:112`):**
+**New interface `SdkPlugin` (`src/client/SewaPlatformSdk.ts:112`):**
 ```ts
 interface SdkPlugin {
   name: string;
-  install(ctx:{sdk:MiniAppSdk; rpc:RpcClient; logger:Logger}): void|Promise<void>;
+  install(ctx:{sdk:SewaPlatformSdk; rpc:RpcClient; logger:Logger}): void|Promise<void>;
   onInitialize?(): Promise<void>;
   onDestroy?(): void;
 }
 ```
 
 **Class fields:**
-- Added `get chat(): ChatSdkModule { return this.ai; }` alias (`src/client/MiniAppSdk.ts:142`) — `@deprecated` on `ai` vs `chat` via `src/types/sdk.types.ts:113`.
-- Added `private readonly plugins: SdkPlugin[] = []` (`src/client/MiniAppSdk.ts:162`).
+- Added `get chat(): ChatSdkModule { return this.ai; }` alias (`src/client/SewaPlatformSdk.ts:142`) — `@deprecated` on `ai` vs `chat` via `src/types/sdk.types.ts:113`.
+- Added `private readonly plugins: SdkPlugin[] = []` (`src/client/SewaPlatformSdk.ts:162`).
 
-**Constructor (`src/client/MiniAppSdk.ts:164`):**
+**Constructor (`src/client/SewaPlatformSdk.ts:164`):**
 - Added `validateSdkOptions(options)` as first statement.
-- `debug` now `{ snapshot, diagnose: () => this.diagnose() }` (`src/client/MiniAppSdk.ts:269`).
-- Replaced `globalThis[SDK_GLOBAL_KEY]=this` with `registerInstance(this)` (`src/client/MiniAppSdk.ts:272`).
+- `debug` now `{ snapshot, diagnose: () => this.diagnose() }` (`src/client/SewaPlatformSdk.ts:269`).
+- Replaced `globalThis[SDK_GLOBAL_KEY]=this` with `registerInstance(this)` (`src/client/SewaPlatformSdk.ts:272`).
 
-**`runInitializeSequence` (`src/client/MiniAppSdk.ts:374`):**
+**`runInitializeSequence` (`src/client/SewaPlatformSdk.ts:374`):**
 - After `this.initialized = true`, loop `for (const plugin of this.plugins) await plugin.onInitialize?.()` with warn-on-throw.
 
-**New `diagnose()` (`src/client/MiniAppSdk.ts:414`):**
+**New `diagnose()` (`src/client/SewaPlatformSdk.ts:414`):**
 - Builds `Diagnostic[]` via `this.debug.snapshot()` + live checks:
   - `NOT_INITIALIZED` info if `!initialized && !destroyed`
   - `DESTROYED` warn if destroyed
@@ -152,30 +152,30 @@ interface SdkPlugin {
   - `DIAGNOSE_ERROR` error on internal throw.
 - Never throws; details include `miniAppId/traceId/pendingRequests/transport/plugins`.
 
-**`destroy()` (`src/client/MiniAppSdk.ts:520`):**
+**`destroy()` (`src/client/SewaPlatformSdk.ts:520`):**
 - Iterate `[...plugins].reverse()` calling `onDestroy` with warn-on-throw.
 - Replace `globalThis` delete with `unregisterInstance(this)`.
 
-**`on` overloads (`src/client/MiniAppSdk.ts:549`):**
+**`on` overloads (`src/client/SewaPlatformSdk.ts:549`):**
 - JSDoc updated: `signal` auto-unsubscribes; delegates to `rpc.onEvent`.
 
-**New `once` (`src/client/MiniAppSdk.ts:567`):**
+**New `once` (`src/client/SewaPlatformSdk.ts:567`):**
 - `Promise` that resolves on next `event`, rejects if `signal.aborted` before fire or via `signal` abort after subscribe. Uses `on` + `removeEventListener`.
 
-**New `events` (`src/client/MiniAppSdk.ts:609`):**
+**New `events` (`src/client/SewaPlatformSdk.ts:609`):**
 - Returns `AsyncIterable` with `Symbol.asyncIterator`:
   - `queue: unknown[]`, `pendingResolve`, `done`, `unsubscribe = sdk.on(event, ...)`.
   - `onAbort` completes iterator, unsubscribes.
   - `next()` drains queue or parks `pendingResolve`; `return()` cleans up signal + unsubscribe.
 
-**`request`/`requestSafe` (`src/client/MiniAppSdk.ts:683`):**
+**`request`/`requestSafe` (`src/client/SewaPlatformSdk.ts:683`):**
 - Added `requestSafe<T>(...): Promise<{ok:true,value:T}|{ok:false,error:Error}>` try/catch wrapper.
 
-**`usePlugin` (`src/client/MiniAppSdk.ts:739`):**
+**`usePlugin` (`src/client/SewaPlatformSdk.ts:739`):**
 - Dedup by `name` (warn skip), `await install`, push, if `initialized` then `await onInitialize` with warn-on-throw.
 
-**`getInstance` static (`src/client/MiniAppSdk.ts:795`):**
-- `static getInstance(miniAppId?) => getRegistryInstance(miniAppId)` — prefer over `window.__GSA_SDK__`.
+**`getInstance` static (`src/client/SewaPlatformSdk.ts:795`):**
+- `static getInstance(miniAppId?) => getRegistryInstance(miniAppId)` — prefer over `window.__SEWA_SDK__`.
 
 #### `src/client/index.ts` (3 → 3 lines) — SMALL
 - Now `export type {SdkPlugin}` and `export * from "./instance-registry"` (`src/client/index.ts:1`).
@@ -187,9 +187,9 @@ interface SdkPlugin {
 - Added `validateSdkOptions` re-export (`src/index.ts:29`).
 - Added `Diagnostic/DiagnosticSeverity` to `src/types` re-export (`src/index.ts:56`).
 - `activeInstance` now delegates to registry:
-  - `createMiniAppSdk` → `registerRegistryInstance(sdk); activeInstance=sdk` (`src/index.ts:190`).
-  - `getMiniAppSdk` → check `activeInstance` then `getRegistryInstance()` fallback (`src/index.ts:201`).
-  - `initMiniAppSdk` → after `initialize()`, `registerRegistryInstance(sdk)` (`src/index.ts:218`).
+  - `createSewaPlatformSdk` → `registerRegistryInstance(sdk); activeInstance=sdk` (`src/index.ts:190`).
+  - `getSewaPlatformSdk` → check `activeInstance` then `getRegistryInstance()` fallback (`src/index.ts:201`).
+  - `initSewaPlatformSdk` → after `initialize()`, `registerRegistryInstance(sdk)` (`src/index.ts:218`).
   - New `getActiveInstance()` deprecated alias (`src/index.ts:228`).
 
 #### `src/errors/sdk-error.ts` (+15 lines) — SMALL
@@ -219,7 +219,7 @@ interface SdkPlugin {
 #### `src/types/sdk.types.ts` (+71 lines) — MEDIUM
 - Added `DiagnosticSeverity = "info"|"warn"|"error"` and `Diagnostic` (`src/types/sdk.types.ts:58`).
 - `SdkDebug` now `{ snapshot():SdkDebugSnapshot; diagnose():Diagnostic[] }` (`src/types/sdk.types.ts:68`).
-- `MiniAppSdkInterface` now:
+- `SewaPlatformSdkInterface` now:
   - `readonly chat: ChatSdkModule` with `@deprecated Use chat instead` on `ai` (`src/types/sdk.types.ts:113`).
   - `once` overloads (`src/types/sdk.types.ts:174`) and `events` overloads (`src/types/sdk.types.ts:187`).
   - `requestSafe` (`src/types/sdk.types.ts:196`).
@@ -234,8 +234,8 @@ interface SdkPlugin {
 
 ### 3.4 Modified Files — Tests / Tooling
 
-#### `src/client/MiniAppSdk.test.ts` (1 line)
-- `expect(sdk.links.isSupported()).toBe(false)` → `expect((sdk.links as unknown as {isSupported:boolean|(()=>boolean)}).isSupported).toBe(false)` (`src/client/MiniAppSdk.test.ts:542`) because `LinksSdkModule` in `@lizuz/mini-app-types` defines `isSupported?: boolean` property, not method.
+#### `src/client/SewaPlatformSdk.test.ts` (1 line)
+- `expect(sdk.links.isSupported()).toBe(false)` → `expect((sdk.links as unknown as {isSupported:boolean|(()=>boolean)}).isSupported).toBe(false)` (`src/client/SewaPlatformSdk.test.ts:542`) because `LinksSdkModule` in `sewa-platform-types` defines `isSupported?: boolean` property, not method.
 
 #### `src/modules/navigation.test.ts` (12 lines)
 - `ACTIONS.NAVIGATION.BACK/PUSH` → `ACTIONS.NAVIGATION.ROUTER` (5 occurrences) to match `src/modules/navigation.module.ts:58` which uses `ROUTER` for both `back`/`push`.
@@ -261,7 +261,7 @@ src/types/validate-options.ts     (+73)  E3
 src/testing/mock-host.ts          (+95)  T1
 
 # Modified
-src/client/MiniAppSdk.ts          +302 -22  (chat alias, diagnose, once/events, requestSafe, usePlugin, registerInstance, validate)
+src/client/SewaPlatformSdk.ts          +302 -22  (chat alias, diagnose, once/events, requestSafe, usePlugin, registerInstance, validate)
 src/rpc/rpc-client.ts             +22 -6    (signal + bounded guard)
 src/transport/default-transport.ts+41 -12   (dev validation logging)
 src/types/sdk.types.ts            +71       (Diagnostic, chat, once/events/requestSafe/usePlugin)
@@ -273,7 +273,7 @@ src/client/index.ts               +3 -2
 src/types/index.ts                +3
 src/modules/chat.module.ts        4±        (AI fix)
 # Tests (baseline green)
-src/client/MiniAppSdk.test.ts     3±
+src/client/SewaPlatformSdk.test.ts     3±
 src/modules/navigation.test.ts    12±
 src/modules/http.module.test.ts   5±
 src/testing/index.ts              2+
@@ -284,7 +284,7 @@ etc/sewa-sdk.api.md               +177
 
 ## 5. Verification & Backward Compatibility
 
-- **No breaking API removed.** All new symbols are additive; old `sdk.ai`, `getMiniAppSdk()`, `window.__GSA_SDK__`, `request()` etc. keep working. New `chat` is alias, `links.isSupported` fix keeps property shape, `http.post` 2-arg remains compatible at runtime.
+- **No breaking API removed.** All new symbols are additive; old `sdk.ai`, `getSewaPlatformSdk()`, `window.__SEWA_SDK__`, `request()` etc. keep working. New `chat` is alias, `links.isSupported` fix keeps property shape, `http.post` 2-arg remains compatible at runtime.
 - **Additive gate:** `heartbeat`/`metrics`/`signal`/`replay`/`validateSdkOptions`/`usePlugin`/`diagnose` are opt-in.
 - **Validation:** `pnpm typecheck` → 0 errors, `pnpm lint` (biome) → 0, `pnpm test` → 201/201, `pnpm build` → `dist/sewa-sdk.js/cjs, sewa-sdk.mjs/esm, sewa-sdk.min.js 42.4kB raw 12.9kB gz` + `dist/sewa-sdk.d.ts`.
 - **Wire unchanged:** `PROTOCOL_VERSION 1.0.0` (`src/constants/protocol.constants.ts:7`), `PlatformMessage` shape (`src/protocol/message.types.ts:32`) untouched; new `validateSdkOptions` is client-only.
@@ -297,8 +297,8 @@ etc/sewa-sdk.api.md               +177
 | If you currently… | Do this (optional) | Impact |
 |-------------------|--------------------|--------|
 | Use `sdk.ai` | Prefer `sdk.chat` (alias) — `ai` marked `@deprecated` will remain for one major. | No break. |
-| Read `window.__GSA_SDK__` | Prefer `MiniAppSdk.getInstance(miniAppId)` or `getInstance()` from `instance-registry`. | Old global keeps working. |
-| Call `new MiniAppSdk({miniAppId})` with bad timeout | Catch `SdkError {code:"INVALID_OPTIONS"}` — now throws fast. | Fail-fast vs silent bug. |
+| Read `window.__SEWA_SDK__` | Prefer `SewaPlatformSdk.getInstance(miniAppId)` or `getInstance()` from `instance-registry`. | Old global keeps working. |
+| Call `new SewaPlatformSdk({miniAppId})` with bad timeout | Catch `SdkError {code:"INVALID_OPTIONS"}` — now throws fast. | Fail-fast vs silent bug. |
 | Subscribe via `sdk.on(event, cb)` | Add `{signal: controller.signal}` to auto-unsubscribe on unmount. | Opt-in. |
 | Need next-event wait | Use `await sdk.once(event)` or `for await (const e of sdk.events(event))`. | New. |
 | Prefer values over throws | Use `sdk.requestSafe(...)` (`{ok, value|error}`). | New. |

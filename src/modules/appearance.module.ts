@@ -16,7 +16,7 @@ const DEFAULT_STATE: AppearanceState = {
   theme: { preference: "system", mode: "light" },
 };
 
-/** Language subtags written right-to-left, used to derive `direction` from a bare locale string. */
+//left to right languages list
 const RTL_LANGUAGES = new Set([
   "ar",
   "he",
@@ -31,11 +31,7 @@ const RTL_LANGUAGES = new Set([
   "nqo",
 ]);
 
-/**
- * Resolves `system` into a concrete mode. The Flutter shell sends only a
- * preference, so `system` has to be resolved on this side; `matchMedia` is
- * absent in the WebView tests and in SSR, hence the fallback.
- */
+// preference resolve based on platform
 function resolveSystemMode(fallback: ThemeMode): ThemeMode {
   if (
     typeof window !== "undefined" &&
@@ -52,7 +48,6 @@ function resolveSystemMode(fallback: ThemeMode): ThemeMode {
   return fallback;
 }
 
-/** Expands a locale tag (`en`, `en-LK`, `ar_SA`) into a full `LocaleState`. */
 function localeFromTag(tag: string): LocaleState | null {
   const normalized = tag.trim().replace(/_/g, "-");
   if (!normalized) return null;
@@ -71,26 +66,12 @@ function localeFromTag(tag: string): LocaleState | null {
   return locale;
 }
 
-/**
- * Coerces whatever a host sent for "locale" into a full `LocaleState`.
- *
- * Accepts the bare tag the Flutter shell sends (`"en-LK"`), the structured
- * state the web shell's `appearance` namespace returns, and the
- * `{ locale: … }` wrapper an event payload may arrive in. Returns `null` for
- * anything unusable so the caller can leave the store untouched rather than
- * overwrite good state with garbage.
- *
- * Fields the host supplied always win: `direction` is only derived from the
- * language subtag when the host didn't say.
- */
 export function normalizeLocale(input: unknown): LocaleState | null {
   if (typeof input === "string") return localeFromTag(input);
   if (!input || typeof input !== "object") return null;
 
   const candidate = input as Partial<LocaleState> & { locale?: unknown };
 
-  // `LocaleState.locale` is a string; an object there means a `{ locale: … }`
-  // wrapper, so unwrap one level and re-enter.
   if (candidate.locale && typeof candidate.locale === "object") {
     return normalizeLocale(candidate.locale);
   }
@@ -116,15 +97,6 @@ export function normalizeLocale(input: unknown): LocaleState | null {
   return locale;
 }
 
-/**
- * Coerces whatever a host sent for "theme" into a full `ThemeState`.
- *
- * Accepts the bare preference the Flutter shell sends (`"dark"`), the
- * `{ preference, mode }` state the web shell returns, and the
- * `{ theme: … }` wrapper an event payload may arrive in. `system` is
- * resolved to a concrete mode when the host didn't already resolve it.
- * Returns `null` for anything unusable.
- */
 export function normalizeTheme(
   input: unknown,
   fallbackMode: ThemeMode = "light",
@@ -144,7 +116,6 @@ export function normalizeTheme(
   if (!input || typeof input !== "object") return null;
   const candidate = input as Partial<ThemeState> & { theme?: unknown };
 
-  // A `{ theme: … }` wrapper — `ThemeState` itself has no `theme` field.
   if (candidate.theme !== undefined && candidate.preference === undefined) {
     return normalizeTheme(candidate.theme, fallbackMode);
   }
@@ -152,8 +123,6 @@ export function normalizeTheme(
   const base = normalizeTheme(candidate.preference, fallbackMode);
   if (!base) return null;
 
-  // A host-resolved mode is authoritative — only fall back to our own
-  // resolution when it didn't send one.
   const mode: ThemeMode =
     candidate.mode === "dark" || candidate.mode === "light"
       ? candidate.mode
@@ -161,37 +130,18 @@ export function normalizeTheme(
   return { preference: base.preference, mode };
 }
 
-/** Event names published by the host (mirror of host `PLATFORM_EVENTS`). */
 export const APPEARANCE_EVENTS = {
   LOCALE_CHANGED: "appearance.locale.changed",
   THEME_CHANGED: "appearance.theme.changed",
 } as const;
 
-/**
- * Internal handle returned alongside the public `AppearanceSdkModule` so the
- * composition root (`MiniAppSdk`) can push host-published `appearance.*`
- * events into the store.
- */
 export interface AppearanceModuleHandle {
   module: AppearanceSdkModule;
   setLocale(locale: LocaleState): void;
   setTheme(theme: ThemeState): void;
-  /**
-   * Seeds the store from the loose `{ theme, locale }` hint a host attaches
-   * to its `platform.getType` reply. This is how the Flutter shell — which
-   * doesn't implement the `appearance` namespace — gets its theme and locale
-   * into `sdk.appearance`, so mini-app code reads the same surface on both
-   * shells.
-   */
   applyHint(hint: AppearanceType): void;
 }
 
-/**
- * Host-driven locale & theme module. Reads the active locale/theme from the
- * host and keeps a tiny observable store that subscribers (framework hooks)
- * consume. The host is the single source of truth: on `appearance.locale.changed`
- * / `appearance.theme.changed` the SDK updates the store and listeners re-render.
- */
 export function createAppearanceModule(rpc: RpcClient): AppearanceModuleHandle {
   let state: AppearanceState = { ...DEFAULT_STATE };
   const listeners = new Set<(next: AppearanceState) => void>();
@@ -205,8 +155,6 @@ export function createAppearanceModule(rpc: RpcClient): AppearanceModuleHandle {
       try {
         listener(snapshot);
       } catch (error) {
-        // A subscriber must not break the notification loop.
-        // eslint-disable-next-line no-console
         console.error("[appearance] listener error:", error);
       }
     }
@@ -242,10 +190,6 @@ export function createAppearanceModule(rpc: RpcClient): AppearanceModuleHandle {
 
   const module: AppearanceSdkModule = {
     async getLocale(): Promise<LocaleState> {
-      // Hosts that deliver appearance via the `platform.getType` hint (the
-      // Flutter shell) don't implement this namespace, so an explicit call
-      // would reject. Serving the store keeps the module's surface identical
-      // on every shell.
       if (!rpc.getCapabilities().includes(NAMESPACES.APPEARANCE)) {
         return { ...state.locale };
       }

@@ -2,4 +2,4 @@ export type {
   AuthSdkModule,
   PermissionsSdkModule,
   PlatformUser,
-} from "@lizuz/mini-app-types";
+} from "sewa-platform-types";
