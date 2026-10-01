@@ -1,6 +1,6 @@
 {
-  "name": "sewa-sdk",
-  "version": "0.0.0-beta",
+  "name": "@lizuz/sewa-sdk",
+  "version": "1.1.1",
   "description": "Framework-agnostic SDK for vendor mini apps.",
   "main": "./dist/sewa-sdk.js",
   "module": "./dist/sewa-sdk.mjs",
